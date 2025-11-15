@@ -1429,13 +1429,15 @@
                     <tr>
                       <th style="width: 60px;">完了</th>
                       <th>タスク</th>
+                      <th style="width: 150px;">クライアント</th>
+                      <th style="width: 150px;">案件</th>
                       <th style="width: 120px;">期日</th>
                       <th style="width: 100px;">操作</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr
-                      v-for="todo in data.todos.filter(t => t.projectid === selectedProject)"
+                      v-for="todo in data.todos"
                       :key="todo.id"
                       :class="{ 'todo-completed': todo.completed }"
                     >
@@ -1443,6 +1445,8 @@
                         <input type="checkbox" :checked="todo.completed" @change="toggleTodoComplete(todo)" />
                       </td>
                       <td :style="{ textDecoration: todo.completed ? 'line-through' : 'none' }">{{ todo.title }}</td>
+                      <td>{{ getTodoClientName(todo.projectid) }}</td>
+                      <td>{{ getTodoProjectName(todo.projectid) }}</td>
                       <td>{{ todo.duedate || '-' }}</td>
                       <td>
                         <button @click="editingTodo = { ...todo }" class="btn btn-sm" style="padding: 4px 8px; font-size: 12px;">編集</button>
@@ -1497,14 +1501,6 @@
                 <option value="medium">中</option>
                 <option value="high">高</option>
               </select>
-            </div>
-
-            <div class="form-group progress-control">
-              <label>進捗: {{ editingTask.progress }}%</label>
-              <input v-model.number="editingTask.progress" type="range" min="0" max="100" class="progress-input">
-              <div class="progress-track">
-                <div class="progress-track-fill" :style="{ width: editingTask.progress + '%' }"></div>
-              </div>
             </div>
 
             <div class="form-row">
@@ -1753,8 +1749,17 @@
           </div>
           <div class="modal-content">
             <div class="form-group">
+              <label>案件 *</label>
+              <select v-model="newTodoForm.projectid">
+                <option value="">案件を選択してください</option>
+                <option v-for="project in data.projects" :key="project.id" :value="project.id">
+                  {{ getClientName(project.clientid) }} - {{ project.name }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
               <label>タスク名 *</label>
-              <input v-model="newTodoForm.title" type="text" placeholder="タスク名を入力" @keyup.enter="addTodo">
+              <input v-model="newTodoForm.title" type="text" placeholder="タスク名を入力">
             </div>
             <div class="form-group">
               <label>期日</label>
@@ -1776,6 +1781,15 @@
             <button @click="editingTodo = null" class="modal-close">✕</button>
           </div>
           <div class="modal-content">
+            <div class="form-group">
+              <label>案件 *</label>
+              <select v-model="editingTodo.projectid">
+                <option value="">案件を選択してください</option>
+                <option v-for="project in data.projects" :key="project.id" :value="project.id">
+                  {{ getClientName(project.clientid) }} - {{ project.name }}
+                </option>
+              </select>
+            </div>
             <div class="form-group">
               <label>タスク名 *</label>
               <input v-model="editingTodo.title" type="text">
@@ -1910,7 +1924,7 @@
           newTodoForm: {
             title: '',
             duedate: '',
-            projectid: null
+            projectid: ''
           },
           showAddTodoModal: false,
           editingTodo: null,
@@ -1963,10 +1977,10 @@
             });
 
             startDate = new Date(earliestTask.startdate);
-            startDate.setDate(startDate.getDate() - 30); // 最初のタスクの30日前から開始
+            startDate.setDate(startDate.getDate() - 7); // 最初のタスクの7日前から開始
 
             endDate = new Date(latestTask.enddate);
-            endDate.setDate(endDate.getDate() + 180); // 最後のタスクの180日後まで表示
+            endDate.setDate(endDate.getDate() + 7); // 最後のタスクの7日後まで表示
 
             // 最低でも今日から1年先まで表示
             const oneYearFromToday = new Date(this.today);
@@ -2175,6 +2189,17 @@
         },
         getSubtaskTitle(subtaskId) {
           return this.data.subtasks.find(s => s.id === subtaskId)?.title || '';
+        },
+        getClientName(clientId) {
+          return this.data.clients.find(c => c.id === clientId)?.name || '';
+        },
+        getTodoProjectName(projectId) {
+          return this.data.projects.find(p => p.id === projectId)?.name || '-';
+        },
+        getTodoClientName(projectId) {
+          const project = this.data.projects.find(p => p.id === projectId);
+          if (!project) return '-';
+          return this.getClientName(project.clientid);
         },
         getStatusLabel(status) {
           const labels = { pending: '未着手', 'in-progress': '進行中', completed: '完了' };
@@ -3068,6 +3093,10 @@
           }
         },
         async addTodo() {
+          if (!this.newTodoForm.projectid) {
+            alert('案件を選択してください');
+            return;
+          }
           if (!this.newTodoForm.title.trim()) {
             alert('タスク名を入力してください');
             return;
@@ -3075,7 +3104,7 @@
           try {
             const newTodo = {
               id: generateUUID(),
-              projectid: this.selectedProject,
+              projectid: this.newTodoForm.projectid,
               title: this.newTodoForm.title,
               duedate: this.newTodoForm.duedate || null,
               completed: false
@@ -3083,24 +3112,30 @@
             await supabase.from('todos').insert([newTodo]);
             this.data.todos.push(newTodo);
             this.showAddTodoModal = false;
-            this.newTodoForm = { title: '', duedate: '', projectid: null };
+            this.newTodoForm = { title: '', duedate: '', projectid: '' };
           } catch (error) {
             console.error('追加エラー:', error);
             alert('ToDoの追加に失敗しました');
           }
         },
         async updateTodo() {
+          if (!this.editingTodo.projectid) {
+            alert('案件を選択してください');
+            return;
+          }
           if (!this.editingTodo.title.trim()) {
             alert('タスク名を入力してください');
             return;
           }
           try {
             await supabase.from('todos').update({
+              projectid: this.editingTodo.projectid,
               title: this.editingTodo.title,
               duedate: this.editingTodo.duedate
             }).eq('id', this.editingTodo.id);
             const index = this.data.todos.findIndex(t => t.id === this.editingTodo.id);
             if (index !== -1) {
+              this.data.todos[index].projectid = this.editingTodo.projectid;
               this.data.todos[index].title = this.editingTodo.title;
               this.data.todos[index].duedate = this.editingTodo.duedate;
             }
