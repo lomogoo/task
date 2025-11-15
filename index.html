@@ -352,6 +352,7 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      height: 100%;
     }
 
     .gantt-title-row {
@@ -391,29 +392,16 @@
       position: relative;
     }
 
-    .gantt-resize-handle {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 6px;
-      cursor: row-resize;
-      background-color: transparent;
-      border-bottom: 2px solid #e2e8f0;
-      transition: background-color 0.2s;
-    }
-
-    .gantt-resize-handle:hover {
-      background-color: #3b82f6;
-    }
-
     .gantt-header {
-      display: flex;
       position: sticky;
       top: 0;
       z-index: 10;
       background-color: #f1f5f9;
       border-bottom: 1px solid #e2e8f0;
+    }
+
+    .gantt-header-row {
+      display: flex;
     }
 
     .gantt-header-cell {
@@ -429,6 +417,26 @@
     .gantt-dates-header {
       display: flex;
       flex-shrink: 0;
+      flex: 1;
+    }
+
+    .gantt-month-row {
+      display: flex;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .gantt-month-header {
+      text-align: center;
+      border-right: 1px solid #e2e8f0;
+      font-size: 12px;
+      color: #64748b;
+      padding: 6px 4px;
+      font-weight: 600;
+      background-color: #f8fafc;
+    }
+
+    .gantt-day-row {
+      display: flex;
     }
 
     .gantt-date-header {
@@ -455,7 +463,7 @@
     .gantt-row {
       display: flex;
       border-bottom: 1px solid #f1f5f9;
-      min-height: 40px;
+      min-height: 80px; /* 複数のタスクバーを表示できるように高さを増やす */
     }
 
     .gantt-row:hover {
@@ -498,6 +506,11 @@
       border-right: 1px solid #e2e8f0;
       position: relative;
       flex-shrink: 0;
+      cursor: pointer;
+    }
+
+    .gantt-date-cell:hover {
+      background-color: #f0f9ff;
     }
 
     .gantt-date-cell.today {
@@ -509,7 +522,8 @@
       top: 4px;
       left: 0;
       right: 0;
-      height: 32px;
+      height: auto;
+      min-height: 32px;
       pointer-events: none;
     }
 
@@ -517,7 +531,7 @@
       position: absolute;
       height: 28px;
       border-radius: 4px;
-      cursor: pointer;
+      cursor: move;
       display: flex;
       align-items: center;
       padding: 0 8px;
@@ -530,11 +544,30 @@
       transition: opacity 0.2s;
       pointer-events: auto;
       top: 0;
-      border: none;
+      border: 2px solid transparent;
+      user-select: none;
     }
 
     .gantt-bar:hover {
-      opacity: 0.8;
+      opacity: 0.9;
+      border-color: rgba(255, 255, 255, 0.5);
+    }
+
+    .gantt-bar-resize-handle {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 8px;
+      cursor: ew-resize;
+      background-color: rgba(255, 255, 255, 0.3);
+      border-radius: 0 4px 4px 0;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .gantt-bar:hover .gantt-bar-resize-handle {
+      opacity: 1;
     }
 
     .gantt-bar.completed {
@@ -547,125 +580,6 @@
 
     .gantt-bar.pending {
       background-color: #94a3b8;
-    }
-
-    .todo-section {
-      border-top: 1px solid #e2e8f0;
-      background-color: #f8fafc;
-      padding: 24px;
-      height: 35%;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    .todo-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 12px;
-      font-size: 14px;
-      font-weight: 700;
-      color: #0f172a;
-    }
-
-    .todo-header button {
-      margin-left: auto;
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      border-radius: 4px;
-      font-size: 14px;
-      color: #475569;
-    }
-
-    .todo-header button:hover {
-      background-color: #e2e8f0;
-    }
-
-    .filters {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-    }
-
-    .filter-group {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-    }
-
-    .filter-group label {
-      font-weight: 600;
-      color: #475569;
-    }
-
-    .filter-group select {
-      border: 1px solid #cbd5e1;
-      border-radius: 4px;
-      padding: 6px 8px;
-      font-size: 12px;
-      background-color: white;
-      cursor: pointer;
-    }
-
-    .todo-list {
-      flex: 1;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .todo-item {
-      background-color: white;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      padding: 12px;
-      cursor: pointer;
-      transition: all 0.2s;
-      text-align: left;
-    }
-
-    .todo-item:hover {
-      border-color: #93c5fd;
-      background-color: #f0f9ff;
-    }
-
-    .todo-item-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: #0f172a;
-      margin-bottom: 4px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .todo-item-main-task {
-      font-size: 12px;
-      color: #64748b;
-      margin-bottom: 4px;
-    }
-
-    .todo-item-date {
-      font-size: 12px;
-      color: #64748b;
-    }
-
-    .todo-item-badges {
-      display: flex;
-      gap: 8px;
-      margin-top: 8px;
-      flex-wrap: wrap;
     }
 
     .badge {
@@ -1046,109 +960,74 @@
               </div>
               <div class="gantt-container" ref="ganttContainer">
                 <div class="gantt-header">
-                  <div class="gantt-header-cell">タスク</div>
-                  <div class="gantt-dates-header">
-                    <div
-                      v-for="(date, idx) in headerDates"
-                      :key="idx"
-                      class="gantt-date-header"
-                      :class="{ today: idx === todayOffset }"
-                    >
-                      {{ date.getDate() }}
+                  <!-- 月表示行 -->
+                  <div class="gantt-header-row gantt-month-row">
+                    <div class="gantt-header-cell">タスク</div>
+                    <div class="gantt-dates-header">
+                      <div
+                        v-for="(group, idx) in monthGroups"
+                        :key="idx"
+                        class="gantt-month-header"
+                        :style="{ width: (group.count * 32) + 'px' }"
+                      >
+                        {{ group.label }}
+                      </div>
+                    </div>
+                  </div>
+                  <!-- 日表示行 -->
+                  <div class="gantt-header-row gantt-day-row">
+                    <div class="gantt-header-cell" style="border-top: 1px solid #e2e8f0;"></div>
+                    <div class="gantt-dates-header">
+                      <div
+                        v-for="(date, idx) in headerDates"
+                        :key="idx"
+                        class="gantt-date-header"
+                        :class="{ today: idx === todayOffset }"
+                      >
+                        {{ date.getDate() }}
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 <div class="gantt-body">
                   <template v-for="mainTask in currentMainTasks" :key="mainTask.id">
+                    <!-- 大分類の行（タスクバーを含む） -->
                     <div class="gantt-row">
                       <div class="gantt-cell main-task">{{ mainTask.title }}</div>
                       <div class="gantt-dates-row">
-                        <div v-for="n in headerDates.length" :key="n" class="gantt-date-cell"></div>
-                      </div>
-                    </div>
-
-                    <template v-for="task in getTasksForMainTask(mainTask.id)" :key="task.id">
-                      <div class="gantt-row">
-                        <div class="gantt-cell sub-task">{{ task.title }}</div>
-                        <div class="gantt-dates-row">
-                          <div
-                            v-for="(date, idx) in headerDates"
-                            :key="idx"
-                            class="gantt-date-cell"
-                            :class="{ today: idx === todayOffset }"
-                          >
-                          </div>
-                          <div class="gantt-bars-container" v-if="isTaskStartDate(task, headerDates[taskStartIndex(task)])">
-                            <button
-                              @click="selectedTaskForDetail = task"
+                        <div
+                          v-for="(date, idx) in headerDates"
+                          :key="idx"
+                          class="gantt-date-cell"
+                          :class="{ today: idx === todayOffset }"
+                          @click="onDateCellClick(date, mainTask.id)"
+                        ></div>
+                        <!-- 大分類に属するすべてのタスクバーを表示 -->
+                        <div class="gantt-bars-container">
+                          <template v-for="task in getTasksForMainTask(mainTask.id)" :key="task.id">
+                            <div
+                              v-if="isTaskStartDate(task, headerDates[taskStartIndex(task)])"
                               class="gantt-bar"
                               :class="task.status"
                               :style="getTaskBarStyle(task)"
                               :title="task.title"
+                              @mousedown="startDraggingTask($event, task)"
+                              @dblclick="selectedTaskForDetail = task"
                             >
                               {{ task.title }}
-                            </button>
-                          </div>
+                              <div
+                                class="gantt-bar-resize-handle"
+                                @mousedown.stop="startResizingTask($event, task)"
+                              ></div>
+                            </div>
+                          </template>
                         </div>
                       </div>
-                    </template>
+                    </div>
                   </template>
                 </div>
-                <div class="gantt-resize-handle" @mousedown="startResizing"></div>
               </div>
-            </div>
-          </div>
-
-          <div class="todo-section">
-            <div class="todo-header">
-              <span>次のTODO</span>
-              <button @click="openAddTaskModal(currentMainTasks[0]?.id)" title="タスクを追加">+</button>
-            </div>
-
-            <div class="filters">
-              <div class="filter-group">
-                <label>ステータス:</label>
-                <select v-model="filters.status">
-                  <option value="all">すべて</option>
-                  <option value="pending">未着手</option>
-                  <option value="in-progress">進行中</option>
-                  <option value="completed">完了</option>
-                </select>
-              </div>
-              <div class="filter-group">
-                <label>優先度:</label>
-                <select v-model="filters.priority">
-                  <option value="all">すべて</option>
-                  <option value="high">高</option>
-                  <option value="medium">中</option>
-                  <option value="low">低</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="todo-list">
-              <div v-if="filteredAndSortedTasks.length === 0" class="empty-message">
-                タスクがありません
-              </div>
-              <button
-                v-for="task in filteredAndSortedTasks"
-                :key="task.id"
-                @click="selectedTaskForDetail = task"
-                class="todo-item"
-              >
-                <div class="todo-item-title">{{ task.title }}</div>
-                <div class="todo-item-main-task">{{ getMainTaskTitle(task.maintaskid) }}</div>
-                <div class="todo-item-date">{{ task.startdate }} 〜 {{ task.enddate }}</div>
-                <div class="todo-item-badges">
-                  <span class="badge" :class="task.status">
-                    {{ getStatusLabel(task.status) }}
-                  </span>
-                </div>
-                <div v-if="task.progress > 0" class="progress-bar">
-                  <div class="progress-bar-fill" :style="{ width: task.progress + '%' }"></div>
-                </div>
-              </button>
             </div>
           </div>
         </div>
@@ -1406,6 +1285,15 @@
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzdWlhYWF4d3d2aGlxa3Rndm9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMxODcxODQsImV4cCI6MjA3ODc2MzE4NH0.ng7SlvSE25Ef_EZZeTe5F2tGcHNco1x1iZ_Nx4ewohg';
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+    // UUID生成関数
+    function generateUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    }
+
     createApp({
       data() {
         return {
@@ -1422,13 +1310,10 @@
           editingClient: null,
           editingProject: null,
           viewMode: 'day',
-          filters: { status: 'all', priority: 'all' },
           expandedClients: {},
           showAddTaskModalForMain: null,
           showAddMainTaskModal: null,
           showAddClientModal: false,
-          ganttHeight: 400,
-          isResizing: false,
           newTaskForm: {
             title: '',
             startdate: '',
@@ -1443,7 +1328,12 @@
           },
           newClientForm: {
             name: ''
-          }
+          },
+          draggingTask: null,
+          resizingTask: null,
+          dragStartX: 0,
+          dragStartDate: null,
+          resizeStartWidth: 0
         };
       },
       computed: {
@@ -1467,26 +1357,11 @@
           const mainTaskIds = this.currentMainTasks.map(m => m.id);
           return this.data.tasks.filter(t => mainTaskIds.includes(t.maintaskid));
         },
-        filteredAndSortedTasks() {
-          const filtered = this.projectTasks.filter(task => {
-            const statusMatch = this.filters.status === 'all' || task.status === this.filters.status;
-            const priorityMatch = this.filters.priority === 'all' || task.priority === this.filters.priority;
-            return statusMatch && priorityMatch;
-          });
-
-          return [...filtered].sort((a, b) => {
-            const priorityOrder = { high: 0, medium: 1, low: 2 };
-            if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
-              return priorityOrder[a.priority] - priorityOrder[b.priority];
-            }
-            return new Date(a.enddate) - new Date(b.enddate);
-          });
-        },
         headerDates() {
           const dates = [];
           const startDate = new Date(this.today);
-          startDate.setDate(startDate.getDate() - 7);
-          for (let i = 0; i < 60; i++) {
+          startDate.setDate(startDate.getDate() - 30); // 過去30日から開始
+          for (let i = 0; i < 365; i++) { // 365日間表示
             const date = new Date(startDate);
             date.setDate(date.getDate() + i);
             dates.push(date);
@@ -1495,9 +1370,33 @@
         },
         todayOffset() {
           const startDate = new Date(this.today);
-          startDate.setDate(startDate.getDate() - 7);
+          startDate.setDate(startDate.getDate() - 30); // 過去30日から開始
           const diffTime = new Date(this.today) - startDate;
           return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        },
+        monthGroups() {
+          const groups = [];
+          let currentMonth = null;
+          let currentGroup = null;
+
+          this.headerDates.forEach((date, idx) => {
+            const monthYear = `${date.getFullYear()}年${date.getMonth() + 1}月`;
+            if (monthYear !== currentMonth) {
+              if (currentGroup) {
+                groups.push(currentGroup);
+              }
+              currentMonth = monthYear;
+              currentGroup = { label: monthYear, count: 1 };
+            } else {
+              currentGroup.count++;
+            }
+          });
+
+          if (currentGroup) {
+            groups.push(currentGroup);
+          }
+
+          return groups;
         }
       },
       methods: {
@@ -1548,7 +1447,7 @@
         taskStartIndex(task) {
           const taskStart = new Date(task.startdate);
           const startDate = new Date(this.today);
-          startDate.setDate(startDate.getDate() - 7);
+          startDate.setDate(startDate.getDate() - 30); // 過去30日から開始
           const diffTime = taskStart - startDate;
           return Math.floor(diffTime / (1000 * 60 * 60 * 24));
         },
@@ -1559,11 +1458,49 @@
           const width = Math.max(32, days * 32 - 8);
           const taskStart = new Date(task.startdate);
           const startDate = new Date(this.today);
-          startDate.setDate(startDate.getDate() - 7);
+          startDate.setDate(startDate.getDate() - 30); // 過去30日から開始
           const left = Math.floor((taskStart - startDate) / (1000 * 60 * 60 * 24)) * 32;
+
+          // 同じ大分類の他のタスクと重ならないように垂直位置を計算
+          const mainTaskId = task.maintaskid;
+          const tasksInSameRow = this.data.tasks.filter(t => t.maintaskid === mainTaskId);
+          let row = 0;
+          const taskIndex = tasksInSameRow.findIndex(t => t.id === task.id);
+
+          // 簡単なレイアウトアルゴリズム: タスクを日付でソートして、重なりをチェック
+          const sortedTasks = [...tasksInSameRow].sort((a, b) => new Date(a.startdate) - new Date(b.startdate));
+          const rows = [];
+
+          for (const t of sortedTasks) {
+            const tStart = new Date(t.startdate);
+            const tEnd = new Date(t.enddate);
+
+            // 配置可能な行を探す
+            let placed = false;
+            for (let r = 0; r < rows.length; r++) {
+              const lastTaskInRow = rows[r][rows[r].length - 1];
+              const lastEnd = new Date(lastTaskInRow.enddate);
+
+              if (tStart > lastEnd) {
+                rows[r].push(t);
+                if (t.id === task.id) row = r;
+                placed = true;
+                break;
+              }
+            }
+
+            if (!placed) {
+              rows.push([t]);
+              if (t.id === task.id) row = rows.length - 1;
+            }
+          }
+
+          const top = row * 36; // 各行の高さは36px
+
           return {
             left: left + 'px',
-            width: width + 'px'
+            width: width + 'px',
+            top: top + 'px'
           };
         },
         async saveTask() {
@@ -1628,11 +1565,11 @@
               return;
             }
             // 新しい大分類を作成
-            const maxOrder = Math.max(...this.data.maintasks.filter(m => m.projectid === this.showAddTaskModalForMain).map(m => m.order), 0);
-            const newMainTaskId = 'm' + (Math.max(...this.data.maintasks.map(m => parseInt(m.id.slice(1)) || 0), 0) + 1);
+            const maxOrder = Math.max(...this.data.maintasks.filter(m => m.projectid === this.currentProject.id).map(m => m.order), 0);
+            const newMainTaskId = generateUUID(); // UUIDを使用
             const newMainTask = {
               id: newMainTaskId,
-              projectid: this.showAddTaskModalForMain,
+              projectid: this.currentProject.id,
               title: this.newTaskForm.customMainTaskTitle,
               order: maxOrder + 1
             };
@@ -1652,7 +1589,7 @@
           }
 
           try {
-            const newId = 't' + (Math.max(...this.data.tasks.map(t => parseInt(t.id.slice(1)) || 0), 0) + 1);
+            const newId = generateUUID(); // UUIDを使用
             const newTask = {
               id: newId,
               maintaskid: mainTaskId,
@@ -1690,7 +1627,7 @@
           }
           try {
             const maxOrder = Math.max(...this.data.maintasks.filter(m => m.projectid === this.showAddMainTaskModal).map(m => m.order), 0);
-            const newId = 'm' + (Math.max(...this.data.maintasks.map(m => parseInt(m.id.slice(1)) || 0), 0) + 1);
+            const newId = generateUUID(); // UUIDを使用
             const newMainTask = {
               id: newId,
               projectid: this.showAddMainTaskModal,
@@ -1722,7 +1659,7 @@
             return;
           }
           try {
-            const newId = '' + (Math.max(...this.data.clients.map(c => parseInt(c.id) || 0), 0) + 1);
+            const newId = generateUUID(); // UUIDを使用
             const newClient = {
               id: newId,
               name: this.newClientForm.name
@@ -1796,25 +1733,102 @@
             alert('案件名の更新に失敗しました');
           }
         },
-        startResizing(e) {
-          this.isResizing = true;
-          const startY = e.clientY;
-          const startHeight = this.$refs.ganttContainer.offsetHeight;
+        // ガントチャート内でタスクを追加
+        async onDateCellClick(date, mainTaskId) {
+          if (this.draggingTask || this.resizingTask) return; // ドラッグ中は無効
 
-          const onMouseMove = (e) => {
-            const delta = e.clientY - startY;
-            const newHeight = Math.max(200, startHeight + delta);
-            this.$refs.ganttContainer.style.height = newHeight + 'px';
-          };
+          const startDate = date.toISOString().split('T')[0];
+          const endDate = startDate; // 1日分のタスク
 
-          const onMouseUp = () => {
-            this.isResizing = false;
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-          };
+          try {
+            const newId = generateUUID();
+            const newTask = {
+              id: newId,
+              maintaskid: mainTaskId,
+              title: '新しいタスク',
+              startdate: startDate,
+              enddate: endDate,
+              status: 'pending',
+              priority: 'medium',
+              notes: '',
+              progress: 0
+            };
 
-          document.addEventListener('mousemove', onMouseMove);
-          document.addEventListener('mouseup', onMouseUp);
+            const { error } = await supabase
+              .from('tasks')
+              .insert([newTask]);
+
+            if (error) throw error;
+
+            this.data.tasks.push(newTask);
+          } catch (error) {
+            console.error('タスク追加エラー:', error);
+            alert('タスクの追加に失敗しました');
+          }
+        },
+        // タスクバーのドラッグ開始
+        startDraggingTask(e, task) {
+          e.stopPropagation();
+          this.draggingTask = task;
+          this.dragStartX = e.clientX;
+          this.dragStartDate = new Date(task.startdate);
+        },
+        // タスクバーのリサイズ開始
+        startResizingTask(e, task) {
+          e.stopPropagation();
+          this.resizingTask = task;
+          this.dragStartX = e.clientX;
+          const start = new Date(task.startdate);
+          const end = new Date(task.enddate);
+          this.resizeStartWidth = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+        },
+        // マウス移動処理
+        onMouseMove(e) {
+          if (this.draggingTask) {
+            const deltaX = e.clientX - this.dragStartX;
+            const deltaDays = Math.round(deltaX / 32);
+
+            const newStartDate = new Date(this.dragStartDate);
+            newStartDate.setDate(newStartDate.getDate() + deltaDays);
+
+            const taskDuration = Math.floor((new Date(this.draggingTask.enddate) - new Date(this.draggingTask.startdate)) / (1000 * 60 * 60 * 24));
+            const newEndDate = new Date(newStartDate);
+            newEndDate.setDate(newEndDate.getDate() + taskDuration);
+
+            this.draggingTask.startdate = newStartDate.toISOString().split('T')[0];
+            this.draggingTask.enddate = newEndDate.toISOString().split('T')[0];
+          } else if (this.resizingTask) {
+            const deltaX = e.clientX - this.dragStartX;
+            const deltaDays = Math.round(deltaX / 32);
+            const newWidth = Math.max(1, this.resizeStartWidth + deltaDays);
+
+            const newEndDate = new Date(this.resizingTask.startdate);
+            newEndDate.setDate(newEndDate.getDate() + newWidth - 1);
+
+            this.resizingTask.enddate = newEndDate.toISOString().split('T')[0];
+          }
+        },
+        // マウスボタン解放処理
+        async onMouseUp() {
+          if (this.draggingTask) {
+            await this.saveTaskDates(this.draggingTask);
+            this.draggingTask = null;
+          } else if (this.resizingTask) {
+            await this.saveTaskDates(this.resizingTask);
+            this.resizingTask = null;
+          }
+        },
+        // タスクの日付を保存
+        async saveTaskDates(task) {
+          try {
+            await supabase
+              .from('tasks')
+              .update({ startdate: task.startdate, enddate: task.enddate })
+              .eq('id', task.id);
+          } catch (error) {
+            console.error('日付保存エラー:', error);
+            alert('日付の保存に失敗しました');
+          }
         }
       },
       watch: {
@@ -1826,6 +1840,14 @@
       },
       mounted() {
         this.loadData();
+        // マウスイベントリスナーを追加
+        document.addEventListener('mousemove', this.onMouseMove);
+        document.addEventListener('mouseup', this.onMouseUp);
+      },
+      beforeUnmount() {
+        // イベントリスナーを削除
+        document.removeEventListener('mousemove', this.onMouseMove);
+        document.removeEventListener('mouseup', this.onMouseUp);
       }
     }).mount('#app');
   </script>
