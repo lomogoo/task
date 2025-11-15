@@ -1360,7 +1360,7 @@
                               :style="getTaskBarStyleWithOffset(task, taskIdx)"
                               :title="task.title"
                               @mousedown="startDraggingTask($event, task)"
-                              @click="if (!isDragging) selectedTaskForDetail = task"
+                              @click="handleTaskClick(task)"
                             >
                               {{ task.title }}
                               <div
@@ -2850,6 +2850,12 @@
           this.dragStartY = e.clientY;
           this.dragStartDate = new Date(task.startdate);
           this.isDragging = false;
+        },
+        // タスククリック処理
+        handleTaskClick(task) {
+          if (!this.isDragging) {
+            this.selectedTaskForDetail = task;
+          }
         },
         // タスクバーのリサイズ開始
         startResizingTask(e, task) {
