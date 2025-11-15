@@ -992,7 +992,7 @@
 
                 <div class="gantt-body">
                   <template v-for="mainTask in currentMainTasks" :key="mainTask.id">
-                    <!-- 大分類の行（タスクバーを含む） -->
+                    <!-- 大分類の行（ヘッダーのみ、タスクバーなし） -->
                     <div class="gantt-row">
                       <div class="gantt-cell main-task">{{ mainTask.title }}</div>
                       <div class="gantt-dates-row">
@@ -1001,30 +1001,45 @@
                           :key="idx"
                           class="gantt-date-cell"
                           :class="{ today: idx === todayOffset }"
-                          @click="onDateCellClick(date, mainTask.id)"
                         ></div>
-                        <!-- 大分類に属するすべてのタスクバーを表示 -->
-                        <div class="gantt-bars-container">
-                          <template v-for="task in getTasksForMainTask(mainTask.id)" :key="task.id">
-                            <div
-                              v-if="isTaskStartDate(task, headerDates[taskStartIndex(task)])"
-                              class="gantt-bar"
-                              :class="task.status"
-                              :style="getTaskBarStyle(task)"
-                              :title="task.title"
-                              @mousedown="startDraggingTask($event, task)"
-                              @dblclick="selectedTaskForDetail = task"
-                            >
-                              {{ task.title }}
-                              <div
-                                class="gantt-bar-resize-handle"
-                                @mousedown.stop="startResizingTask($event, task)"
-                              ></div>
-                            </div>
-                          </template>
-                        </div>
                       </div>
                     </div>
+
+                    <!-- 小分類の行（各小分類ごとにタスクバーを表示） -->
+                    <template v-for="subtask in getSubtasksForMainTask(mainTask.id)" :key="subtask.id">
+                      <div class="gantt-row">
+                        <div class="gantt-cell sub-task">{{ subtask.title }}</div>
+                        <div class="gantt-dates-row">
+                          <div
+                            v-for="(date, idx) in headerDates"
+                            :key="idx"
+                            class="gantt-date-cell"
+                            :class="{ today: idx === todayOffset }"
+                            @click="onDateCellClick(date, subtask.id)"
+                          ></div>
+                          <!-- 小分類に属するすべてのタスクバーを表示 -->
+                          <div class="gantt-bars-container">
+                            <template v-for="task in getTasksForSubtask(subtask.id)" :key="task.id">
+                              <div
+                                v-if="isTaskStartDate(task, headerDates[taskStartIndex(task)])"
+                                class="gantt-bar"
+                                :class="task.status"
+                                :style="getTaskBarStyle(task, subtask.id)"
+                                :title="task.title"
+                                @mousedown="startDraggingTask($event, task)"
+                                @dblclick="selectedTaskForDetail = task"
+                              >
+                                {{ task.title }}
+                                <div
+                                  class="gantt-bar-resize-handle"
+                                  @mousedown.stop="startResizingTask($event, task)"
+                                ></div>
+                              </div>
+                            </template>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
                   </template>
                 </div>
               </div>
@@ -1050,6 +1065,11 @@
             <div class="form-group">
               <label>大分類</label>
               <div class="readonly-field">{{ getMainTaskTitle(editingTask.maintaskid) }}</div>
+            </div>
+
+            <div class="form-group">
+              <label>小分類</label>
+              <div class="readonly-field">{{ getSubtaskTitle(editingTask.subtaskid) }}</div>
             </div>
 
             <div class="form-group">
@@ -1301,6 +1321,7 @@
             clients: [],
             projects: [],
             maintasks: [],
+            subtasks: [],
             tasks: []
           },
           isLoading: true,
@@ -1402,16 +1423,18 @@
       methods: {
         async loadData() {
           try {
-            const [clientsRes, projectsRes, maintasksRes, tasksRes] = await Promise.all([
+            const [clientsRes, projectsRes, maintasksRes, subtasksRes, tasksRes] = await Promise.all([
               supabase.from('clients').select('*'),
               supabase.from('projects').select('*'),
               supabase.from('maintasks').select('*'),
+              supabase.from('subtasks').select('*'),
               supabase.from('tasks').select('*')
             ]);
 
             this.data.clients = clientsRes.data || [];
             this.data.projects = projectsRes.data || [];
             this.data.maintasks = maintasksRes.data || [];
+            this.data.subtasks = subtasksRes.data || [];
             this.data.tasks = tasksRes.data || [];
 
             this.expandedClients[this.data.clients[0]?.id] = true;
@@ -1426,11 +1449,20 @@
         getProjectsForClient(clientId) {
           return this.data.projects.filter(p => p.clientid === clientId);
         },
+        getSubtasksForMainTask(mainTaskId) {
+          return this.data.subtasks.filter(s => s.maintaskid === mainTaskId).sort((a, b) => a.order - b.order);
+        },
         getTasksForMainTask(mainTaskId) {
           return this.data.tasks.filter(t => t.maintaskid === mainTaskId);
         },
+        getTasksForSubtask(subtaskId) {
+          return this.data.tasks.filter(t => t.subtaskid === subtaskId);
+        },
         getMainTaskTitle(mainTaskId) {
           return this.data.maintasks.find(m => m.id === mainTaskId)?.title || '';
+        },
+        getSubtaskTitle(subtaskId) {
+          return this.data.subtasks.find(s => s.id === subtaskId)?.title || '';
         },
         getStatusLabel(status) {
           const labels = { pending: '未着手', 'in-progress': '進行中', completed: '完了' };
@@ -1451,7 +1483,7 @@
           const diffTime = taskStart - startDate;
           return Math.floor(diffTime / (1000 * 60 * 60 * 24));
         },
-        getTaskBarStyle(task) {
+        getTaskBarStyle(task, subtaskId) {
           const start = new Date(task.startdate);
           const end = new Date(task.enddate);
           const days = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
@@ -1461,11 +1493,9 @@
           startDate.setDate(startDate.getDate() - 30); // 過去30日から開始
           const left = Math.floor((taskStart - startDate) / (1000 * 60 * 60 * 24)) * 32;
 
-          // 同じ大分類の他のタスクと重ならないように垂直位置を計算
-          const mainTaskId = task.maintaskid;
-          const tasksInSameRow = this.data.tasks.filter(t => t.maintaskid === mainTaskId);
+          // 同じ小分類の他のタスクと重ならないように垂直位置を計算
+          const tasksInSameRow = this.data.tasks.filter(t => t.subtaskid === subtaskId);
           let row = 0;
-          const taskIndex = tasksInSameRow.findIndex(t => t.id === task.id);
 
           // 簡単なレイアウトアルゴリズム: タスクを日付でソートして、重なりをチェック
           const sortedTasks = [...tasksInSameRow].sort((a, b) => new Date(a.startdate) - new Date(b.startdate));
@@ -1734,17 +1764,22 @@
           }
         },
         // ガントチャート内でタスクを追加
-        async onDateCellClick(date, mainTaskId) {
+        async onDateCellClick(date, subtaskId) {
           if (this.draggingTask || this.resizingTask) return; // ドラッグ中は無効
 
           const startDate = date.toISOString().split('T')[0];
-          const endDate = startDate; // 1日分のタスク
+          // 3日分のタスク
+          const endDateObj = new Date(date);
+          endDateObj.setDate(endDateObj.getDate() + 2);
+          const endDate = endDateObj.toISOString().split('T')[0];
 
           try {
             const newId = generateUUID();
+            const subtask = this.data.subtasks.find(s => s.id === subtaskId);
             const newTask = {
               id: newId,
-              maintaskid: mainTaskId,
+              maintaskid: subtask?.maintaskid || null,
+              subtaskid: subtaskId,
               title: '新しいタスク',
               startdate: startDate,
               enddate: endDate,
@@ -1843,6 +1878,16 @@
         // マウスイベントリスナーを追加
         document.addEventListener('mousemove', this.onMouseMove);
         document.addEventListener('mouseup', this.onMouseUp);
+
+        // ガントチャートを今日の日付にスクロール
+        this.$nextTick(() => {
+          if (this.$refs.ganttContainer) {
+            const todayPosition = this.todayOffset * 32; // 32pxは1日分の幅
+            const containerWidth = this.$refs.ganttContainer.clientWidth;
+            const scrollPosition = todayPosition - containerWidth / 2 + 16; // 画面中央に表示
+            this.$refs.ganttContainer.scrollLeft = Math.max(0, scrollPosition);
+          }
+        });
       },
       beforeUnmount() {
         // イベントリスナーを削除
