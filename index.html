@@ -425,6 +425,10 @@
       color: #64748b;
       border-right: 1px solid #e2e8f0;
       flex-shrink: 0;
+      position: sticky;
+      left: 0;
+      background-color: #f1f5f9;
+      z-index: 20;
     }
 
     .gantt-dates-header {
@@ -517,6 +521,10 @@
       flex-shrink: 0;
       display: flex;
       align-items: center;
+      position: sticky;
+      left: 0;
+      background-color: white;
+      z-index: 5;
     }
 
     .gantt-cell.main-task {
@@ -968,6 +976,82 @@
     ::-webkit-scrollbar-thumb:hover {
       background-color: #94a3b8;
     }
+
+    /* リスト表示 */
+    .list-section {
+      padding: 24px;
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .list-section-inner {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      height: 100%;
+    }
+
+    .list-title-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .list-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .list-container {
+      flex: 1;
+      overflow: auto;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background-color: white;
+    }
+
+    .task-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .task-table thead {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background-color: #f1f5f9;
+    }
+
+    .task-table th {
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 14px;
+      color: #64748b;
+      border-bottom: 1px solid #e2e8f0;
+      white-space: nowrap;
+    }
+
+    .task-table td {
+      padding: 12px;
+      font-size: 14px;
+      color: #475569;
+      border-bottom: 1px solid #f1f5f9;
+    }
+
+    .task-row {
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .task-row:hover {
+      background-color: #f8fafc;
+    }
   </style>
 </head>
 <body>
@@ -1050,20 +1134,21 @@
                 class="view-btn"
                 :class="{ active: viewMode === 'day' }"
               >
-                日単位
+                ガントチャート
               </button>
               <button
-                @click="viewMode = 'week'"
+                @click="viewMode = 'list'"
                 class="view-btn"
-                :class="{ active: viewMode === 'week' }"
+                :class="{ active: viewMode === 'list' }"
               >
-                週単位
+                リスト表示
               </button>
             </div>
             <div class="today-display">本日: {{ today }}</div>
           </div>
 
-          <div class="gantt-section">
+          <!-- ガントチャート表示 -->
+          <div v-if="viewMode === 'day'" class="gantt-section">
             <div class="gantt-section-inner">
               <div class="gantt-title-row">
                 <h2 class="gantt-title">ガントチャート</h2>
@@ -1189,6 +1274,48 @@
                     </template>
                   </template>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- リスト表示 -->
+          <div v-else-if="viewMode === 'list'" class="list-section">
+            <div class="list-section-inner">
+              <div class="list-title-row">
+                <h2 class="list-title">タスク一覧（期日順）</h2>
+              </div>
+              <div class="list-container">
+                <table class="task-table">
+                  <thead>
+                    <tr>
+                      <th>大分類</th>
+                      <th>小分類</th>
+                      <th>タスク名</th>
+                      <th>開始日</th>
+                      <th>終了日</th>
+                      <th>ステータス</th>
+                      <th>優先度</th>
+                      <th>進捗</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="task in sortedTasksByDeadline"
+                      :key="task.id"
+                      @click="selectedTaskForDetail = task"
+                      class="task-row"
+                    >
+                      <td>{{ getMainTaskTitle(task.maintaskid) }}</td>
+                      <td>{{ getSubtaskTitle(task.subtaskid) }}</td>
+                      <td>{{ task.title }}</td>
+                      <td>{{ task.startdate }}</td>
+                      <td>{{ task.enddate }}</td>
+                      <td><span class="badge" :class="task.status">{{ getStatusLabel(task.status) }}</span></td>
+                      <td>{{ task.priority }}</td>
+                      <td>{{ task.progress }}%</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -1558,6 +1685,7 @@
             priority: 'medium',
             status: 'pending',
             selectedMainTaskId: null,
+            selectedSubtaskId: null,
             customMainTaskTitle: ''
           },
           newMainTaskForm: {
@@ -1709,6 +1837,13 @@
         },
         cellWidth() {
           return this.viewMode === 'week' ? 224 : 32; // 週単位は224px、日単位は32px
+        },
+        sortedTasksByDeadline() {
+          return [...this.projectTasks].sort((a, b) => {
+            const dateA = new Date(a.enddate);
+            const dateB = new Date(b.enddate);
+            return dateA - dateB;
+          });
         }
       },
       methods: {
@@ -1915,6 +2050,22 @@
             this.newTaskForm.customMainTaskTitle = '';
           }
         },
+        openAddTaskModalForSubtask(subtaskId) {
+          const subtask = this.data.subtasks.find(s => s.id === subtaskId);
+          if (subtask) {
+            this.showAddTaskModalForMain = subtask.maintaskid;
+            this.newTaskForm.title = '';
+            const endDate = new Date(this.today);
+            endDate.setDate(endDate.getDate() + 2);
+            this.newTaskForm.startdate = this.today;
+            this.newTaskForm.enddate = endDate.toISOString().split('T')[0];
+            this.newTaskForm.priority = 'medium';
+            this.newTaskForm.status = 'pending';
+            this.newTaskForm.selectedMainTaskId = subtask.maintaskid;
+            this.newTaskForm.selectedSubtaskId = subtaskId;
+            this.newTaskForm.customMainTaskTitle = '';
+          }
+        },
         async addTask() {
           if (!this.newTaskForm.title.trim()) {
             alert('タスク名を入力してください');
@@ -1958,6 +2109,7 @@
             const newTask = {
               id: newId,
               maintaskid: mainTaskId,
+              subtaskid: this.newTaskForm.selectedSubtaskId || null,
               title: this.newTaskForm.title,
               startdate: this.newTaskForm.startdate,
               enddate: this.newTaskForm.enddate,
@@ -1975,7 +2127,7 @@
 
             this.data.tasks.push(newTask);
             this.showAddTaskModalForMain = null;
-            this.newTaskForm = { title: '', startdate: this.today, enddate: this.today, priority: 'medium', status: 'pending', selectedMainTaskId: null, customMainTaskTitle: '' };
+            this.newTaskForm = { title: '', startdate: this.today, enddate: this.today, priority: 'medium', status: 'pending', selectedMainTaskId: null, selectedSubtaskId: null, customMainTaskTitle: '' };
           } catch (error) {
             console.error('追加エラー:', error);
             alert('タスクの追加に失敗しました');
