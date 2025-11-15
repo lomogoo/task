@@ -1964,6 +1964,7 @@
         headerDates() {
           const dates = [];
           let startDate, endDate;
+          const today = new Date(this.today);
 
           // プロジェクトのタスクから最も早い日付と最も遅い日付を取得
           if (this.projectTasks.length > 0) {
@@ -1979,21 +1980,27 @@
             startDate = new Date(earliestTask.startdate);
             startDate.setDate(startDate.getDate() - 7); // 最初のタスクの7日前から開始
 
+            // 開始日は最大で今日の1年前までに制限（過去すぎる場合）
+            const oneYearAgo = new Date(today);
+            oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+            if (startDate < oneYearAgo) {
+              startDate = oneYearAgo;
+            }
+
             endDate = new Date(latestTask.enddate);
             endDate.setDate(endDate.getDate() + 7); // 最後のタスクの7日後まで表示
-
-            // 最低でも今日から1年先まで表示
-            const oneYearFromToday = new Date(this.today);
-            oneYearFromToday.setFullYear(oneYearFromToday.getFullYear() + 1);
-            if (endDate < oneYearFromToday) {
-              endDate = oneYearFromToday;
-            }
           } else {
-            // タスクがない場合は今日の30日前から1年先まで表示
-            startDate = new Date(this.today);
+            // タスクがない場合は今日の30日前から開始
+            startDate = new Date(today);
             startDate.setDate(startDate.getDate() - 30);
-            endDate = new Date(this.today);
-            endDate.setFullYear(endDate.getFullYear() + 1);
+            endDate = new Date(today);
+          }
+
+          // 終了日は必ず今日から1年先を含む
+          const oneYearFromToday = new Date(today);
+          oneYearFromToday.setFullYear(oneYearFromToday.getFullYear() + 1);
+          if (endDate < oneYearFromToday) {
+            endDate = oneYearFromToday;
           }
 
           // startDateからendDateまでの全ての日付を生成
@@ -2101,13 +2108,12 @@
       methods: {
         async loadData() {
           try {
-            const [clientsRes, projectsRes, maintasksRes, subtasksRes, tasksRes, todosRes] = await Promise.all([
+            const [clientsRes, projectsRes, maintasksRes, subtasksRes, tasksRes] = await Promise.all([
               supabase.from('clients').select('*'),
               supabase.from('projects').select('*'),
               supabase.from('maintasks').select('*'),
               supabase.from('subtasks').select('*'),
-              supabase.from('tasks').select('*'),
-              supabase.from('todos').select('*')
+              supabase.from('tasks').select('*')
             ]);
 
             this.data.clients = clientsRes.data || [];
@@ -2115,7 +2121,15 @@
             this.data.maintasks = maintasksRes.data || [];
             this.data.subtasks = subtasksRes.data || [];
             this.data.tasks = tasksRes.data || [];
-            this.data.todos = todosRes.data || [];
+
+            // todosテーブルは別途読み込み（存在しない場合はスキップ）
+            try {
+              const todosRes = await supabase.from('todos').select('*');
+              this.data.todos = todosRes.data || [];
+            } catch (todoError) {
+              console.warn('todosテーブルが見つかりません。ToDoリスト機能を使用するには、Supabaseでtodosテーブルを作成してください。');
+              this.data.todos = [];
+            }
 
             this.expandedClients[this.data.clients[0]?.id] = true;
             this.newTaskForm.startdate = this.today;
