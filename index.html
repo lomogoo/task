@@ -502,6 +502,7 @@
       display: flex;
       border-bottom: 1px solid #f1f5f9;
       min-height: 40px;
+      position: relative;
     }
 
     .gantt-row:hover {
@@ -643,6 +644,7 @@
       position: relative;
       flex: 1;
       flex-shrink: 0;
+      z-index: 1;
     }
 
     .gantt-date-cell {
@@ -1197,6 +1199,13 @@
               >
                 リスト表示
               </button>
+              <button
+                @click="viewMode = 'todo'"
+                class="view-btn"
+                :class="{ active: viewMode === 'todo' }"
+              >
+                ToDoリスト
+              </button>
             </div>
             <div class="today-display">本日: {{ today }}</div>
           </div>
@@ -1351,7 +1360,7 @@
                               :style="getTaskBarStyleWithOffset(task, taskIdx)"
                               :title="task.title"
                               @mousedown="startDraggingTask($event, task)"
-                              @click="selectedTaskForDetail = task"
+                              @click="if (!isDragging) selectedTaskForDetail = task"
                             >
                               {{ task.title }}
                               <div
@@ -1404,6 +1413,45 @@
                       <td><span class="badge" :class="task.status">{{ getStatusLabel(task.status) }}</span></td>
                       <td>{{ task.priority }}</td>
                       <td>{{ task.progress }}%</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- ToDoリスト表示 -->
+          <div v-else-if="viewMode === 'todo'" class="list-section">
+            <div class="list-section-inner">
+              <div class="list-title-row">
+                <h2 class="list-title">ToDoリスト</h2>
+                <button @click="showAddTodoModal = true" class="gantt-title-btn">+ ToDo追加</button>
+              </div>
+              <div class="list-container">
+                <table class="task-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 60px;">完了</th>
+                      <th>タスク</th>
+                      <th style="width: 120px;">期日</th>
+                      <th style="width: 100px;">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="todo in data.todos.filter(t => t.projectid === selectedProject)"
+                      :key="todo.id"
+                      :class="{ 'todo-completed': todo.completed }"
+                    >
+                      <td style="text-align: center;">
+                        <input type="checkbox" :checked="todo.completed" @change="toggleTodoComplete(todo)" />
+                      </td>
+                      <td :style="{ textDecoration: todo.completed ? 'line-through' : 'none' }">{{ todo.title }}</td>
+                      <td>{{ todo.duedate || '-' }}</td>
+                      <td>
+                        <button @click="editingTodo = { ...todo }" class="btn btn-sm" style="padding: 4px 8px; font-size: 12px;">編集</button>
+                        <button @click="deleteTodo(todo)" class="btn btn-sm" style="padding: 4px 8px; font-size: 12px; background: #ef4444;">削除</button>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -1700,6 +1748,54 @@
         </div>
       </div>
 
+      <!-- ToDo追加モーダル -->
+      <div v-if="showAddTodoModal" class="modal-overlay" @click="showAddTodoModal = false">
+        <div class="modal" @click.stop>
+          <div class="modal-header">
+            <span>ToDo追加</span>
+            <button @click="showAddTodoModal = false" class="modal-close">✕</button>
+          </div>
+          <div class="modal-content">
+            <div class="form-group">
+              <label>タスク名 *</label>
+              <input v-model="newTodoForm.title" type="text" placeholder="タスク名を入力" @keyup.enter="addTodo">
+            </div>
+            <div class="form-group">
+              <label>期日</label>
+              <input v-model="newTodoForm.duedate" type="date">
+            </div>
+            <div class="modal-actions">
+              <button @click="addTodo" class="btn btn-primary">追加</button>
+              <button @click="showAddTodoModal = false" class="btn btn-secondary">キャンセル</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ToDo編集モーダル -->
+      <div v-if="editingTodo" class="modal-overlay" @click="editingTodo = null">
+        <div class="modal" @click.stop>
+          <div class="modal-header">
+            <span>ToDo編集</span>
+            <button @click="editingTodo = null" class="modal-close">✕</button>
+          </div>
+          <div class="modal-content">
+            <div class="form-group">
+              <label>タスク名 *</label>
+              <input v-model="editingTodo.title" type="text">
+            </div>
+            <div class="form-group">
+              <label>期日</label>
+              <input v-model="editingTodo.duedate" type="date">
+            </div>
+            <div class="modal-actions">
+              <button @click="updateTodo" class="btn btn-primary">更新</button>
+              <button @click="editingTodo = null" class="btn btn-secondary">キャンセル</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Edit Client Modal -->
       <div v-if="editingClient" class="modal-overlay" @click="editingClient = null">
         <div class="modal" @click.stop>
@@ -1775,7 +1871,8 @@
             projects: [],
             maintasks: [],
             subtasks: [],
-            tasks: []
+            tasks: [],
+            todos: []
           },
           isLoading: true,
           selectedProject: 'p1',
@@ -1814,11 +1911,20 @@
           newProjectForm: {
             name: ''
           },
+          newTodoForm: {
+            title: '',
+            duedate: '',
+            projectid: null
+          },
+          showAddTodoModal: false,
+          editingTodo: null,
           draggingTask: null,
           resizingTask: null,
           dragStartX: 0,
+          dragStartY: 0,
           dragStartDate: null,
           resizeStartWidth: 0,
+          isDragging: false,
           draggingMainTask: null,
           draggingSubtask: null,
           dragOverItem: null
@@ -1966,12 +2072,13 @@
       methods: {
         async loadData() {
           try {
-            const [clientsRes, projectsRes, maintasksRes, subtasksRes, tasksRes] = await Promise.all([
+            const [clientsRes, projectsRes, maintasksRes, subtasksRes, tasksRes, todosRes] = await Promise.all([
               supabase.from('clients').select('*'),
               supabase.from('projects').select('*'),
               supabase.from('maintasks').select('*'),
               supabase.from('subtasks').select('*'),
-              supabase.from('tasks').select('*')
+              supabase.from('tasks').select('*'),
+              supabase.from('todos').select('*')
             ]);
 
             this.data.clients = clientsRes.data || [];
@@ -1979,6 +2086,7 @@
             this.data.maintasks = maintasksRes.data || [];
             this.data.subtasks = subtasksRes.data || [];
             this.data.tasks = tasksRes.data || [];
+            this.data.todos = todosRes.data || [];
 
             this.expandedClients[this.data.clients[0]?.id] = true;
             this.newTaskForm.startdate = this.today;
@@ -2011,7 +2119,7 @@
         },
         getSubtaskRowHeight(subtaskId) {
           const tasks = this.getTasksForSubtask(subtaskId);
-          if (tasks.length === 0) return 76;
+          if (tasks.length === 0) return 40; // タスクなしは1行分
 
           // レーン数を計算
           const lanes = [];
@@ -2041,7 +2149,10 @@
             }
           }
 
-          // レーン数 × 36 + 基本の高さ40
+          // レーン数が1の場合は1行分の高さ、2以上の場合は拡張
+          if (lanes.length === 1) {
+            return 40; // 1行分
+          }
           return lanes.length * 36 + 40;
         },
         getMainTaskTitle(mainTaskId) {
@@ -2736,7 +2847,9 @@
           e.stopPropagation();
           this.draggingTask = task;
           this.dragStartX = e.clientX;
+          this.dragStartY = e.clientY;
           this.dragStartDate = new Date(task.startdate);
+          this.isDragging = false;
         },
         // タスクバーのリサイズ開始
         startResizingTask(e, task) {
@@ -2751,6 +2864,14 @@
         onMouseMove(e) {
           if (this.draggingTask) {
             const deltaX = e.clientX - this.dragStartX;
+            const deltaY = e.clientY - this.dragStartY;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+            // 5px以上移動したらドラッグとみなす
+            if (distance > 5) {
+              this.isDragging = true;
+            }
+
             const deltaDays = Math.round(deltaX / 32);
 
             const newStartDate = new Date(this.dragStartDate);
@@ -2776,8 +2897,14 @@
         // マウスボタン解放処理
         async onMouseUp() {
           if (this.draggingTask) {
-            await this.saveTaskDates(this.draggingTask);
+            if (this.isDragging) {
+              await this.saveTaskDates(this.draggingTask);
+            }
             this.draggingTask = null;
+            // isDraggingフラグは少し遅延してリセット（クリックイベントの後に実行）
+            setTimeout(() => {
+              this.isDragging = false;
+            }, 10);
           } else if (this.resizingTask) {
             await this.saveTaskDates(this.resizingTask);
             this.resizingTask = null;
@@ -2906,6 +3033,72 @@
           this.draggingMainTask = null;
           this.draggingSubtask = null;
           this.dragOverItem = null;
+        },
+        // ToDo methods
+        async toggleTodoComplete(todo) {
+          try {
+            const newCompleted = !todo.completed;
+            await supabase.from('todos').update({ completed: newCompleted }).eq('id', todo.id);
+            const index = this.data.todos.findIndex(t => t.id === todo.id);
+            if (index !== -1) this.data.todos[index].completed = newCompleted;
+          } catch (error) {
+            console.error('更新エラー:', error);
+            alert('ToDoの更新に失敗しました');
+          }
+        },
+        async addTodo() {
+          if (!this.newTodoForm.title.trim()) {
+            alert('タスク名を入力してください');
+            return;
+          }
+          try {
+            const newTodo = {
+              id: generateUUID(),
+              projectid: this.selectedProject,
+              title: this.newTodoForm.title,
+              duedate: this.newTodoForm.duedate || null,
+              completed: false
+            };
+            await supabase.from('todos').insert([newTodo]);
+            this.data.todos.push(newTodo);
+            this.showAddTodoModal = false;
+            this.newTodoForm = { title: '', duedate: '', projectid: null };
+          } catch (error) {
+            console.error('追加エラー:', error);
+            alert('ToDoの追加に失敗しました');
+          }
+        },
+        async updateTodo() {
+          if (!this.editingTodo.title.trim()) {
+            alert('タスク名を入力してください');
+            return;
+          }
+          try {
+            await supabase.from('todos').update({
+              title: this.editingTodo.title,
+              duedate: this.editingTodo.duedate
+            }).eq('id', this.editingTodo.id);
+            const index = this.data.todos.findIndex(t => t.id === this.editingTodo.id);
+            if (index !== -1) {
+              this.data.todos[index].title = this.editingTodo.title;
+              this.data.todos[index].duedate = this.editingTodo.duedate;
+            }
+            this.editingTodo = null;
+          } catch (error) {
+            console.error('更新エラー:', error);
+            alert('ToDoの更新に失敗しました');
+          }
+        },
+        async deleteTodo(todo) {
+          if (confirm(`「${todo.title}」を削除しますか？`)) {
+            try {
+              await supabase.from('todos').delete().eq('id', todo.id);
+              this.data.todos = this.data.todos.filter(t => t.id !== todo.id);
+            } catch (error) {
+              console.error('削除エラー:', error);
+              alert('ToDoの削除に失敗しました');
+            }
+          }
         }
       },
       watch: {
