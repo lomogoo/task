@@ -1949,23 +1949,42 @@
         },
         headerDates() {
           const dates = [];
-          let startDate;
+          let startDate, endDate;
 
-          // プロジェクトのタスクから最も早い日付を取得
+          // プロジェクトのタスクから最も早い日付と最も遅い日付を取得
           if (this.projectTasks.length > 0) {
             const earliestTask = this.projectTasks.reduce((earliest, task) => {
               const taskDate = new Date(task.startdate);
               return taskDate < new Date(earliest.startdate) ? task : earliest;
             });
+            const latestTask = this.projectTasks.reduce((latest, task) => {
+              const taskDate = new Date(task.enddate);
+              return taskDate > new Date(latest.enddate) ? task : latest;
+            });
+
             startDate = new Date(earliestTask.startdate);
-            startDate.setDate(startDate.getDate() - 7); // 最初のタスクの7日前から開始
+            startDate.setDate(startDate.getDate() - 30); // 最初のタスクの30日前から開始
+
+            endDate = new Date(latestTask.enddate);
+            endDate.setDate(endDate.getDate() + 180); // 最後のタスクの180日後まで表示
+
+            // 最低でも今日から1年先まで表示
+            const oneYearFromToday = new Date(this.today);
+            oneYearFromToday.setFullYear(oneYearFromToday.getFullYear() + 1);
+            if (endDate < oneYearFromToday) {
+              endDate = oneYearFromToday;
+            }
           } else {
-            // タスクがない場合は今日の30日前から開始
+            // タスクがない場合は今日の30日前から1年先まで表示
             startDate = new Date(this.today);
             startDate.setDate(startDate.getDate() - 30);
+            endDate = new Date(this.today);
+            endDate.setFullYear(endDate.getFullYear() + 1);
           }
 
-          for (let i = 0; i < 365; i++) { // 365日間表示
+          // startDateからendDateまでの全ての日付を生成
+          const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+          for (let i = 0; i <= daysDiff; i++) {
             const date = new Date(startDate);
             date.setDate(date.getDate() + i);
             dates.push(date);
