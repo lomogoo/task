@@ -135,7 +135,8 @@
       margin-left: auto;
     }
 
-    .client-edit-btn {
+    .client-edit-btn,
+    .client-delete-btn {
       background: none;
       border: none;
       cursor: pointer;
@@ -148,16 +149,28 @@
       border-radius: 4px;
       opacity: 0;
       transition: opacity 0.2s;
-      color: #475569;
       font-size: 12px;
     }
 
-    .client-item:hover .client-edit-btn {
+    .client-edit-btn {
+      color: #475569;
+    }
+
+    .client-delete-btn {
+      color: #ef4444;
+    }
+
+    .client-item:hover .client-edit-btn,
+    .client-item:hover .client-delete-btn {
       opacity: 1;
     }
 
     .client-edit-btn:hover {
       background-color: #cbd5e1;
+    }
+
+    .client-delete-btn:hover {
+      background-color: #fee2e2;
     }
 
     .projects-list {
@@ -455,6 +468,26 @@
       font-weight: 700;
     }
 
+    .gantt-date-header.saturday {
+      background-color: #eff6ff;
+      color: #1e40af;
+    }
+
+    .gantt-date-header.sunday,
+    .gantt-date-header.holiday {
+      background-color: #fef2f2;
+      color: #dc2626;
+    }
+
+    .gantt-date-cell.saturday {
+      background-color: #eff6ff;
+    }
+
+    .gantt-date-cell.sunday,
+    .gantt-date-cell.holiday {
+      background-color: #fef2f2;
+    }
+
     .gantt-body {
       display: flex;
       flex-direction: column;
@@ -486,12 +519,75 @@
       background-color: #f1f5f9;
       font-weight: 600;
       color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .gantt-cell.main-task span {
+      flex: 1;
     }
 
     .gantt-cell.sub-task {
       padding-left: 32px;
       color: #475569;
       font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .gantt-cell.sub-task span {
+      flex: 1;
+    }
+
+    .gantt-add-btn,
+    .gantt-edit-btn,
+    .gantt-delete-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.2s;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+
+    .gantt-row:hover .gantt-add-btn,
+    .gantt-row:hover .gantt-edit-btn,
+    .gantt-row:hover .gantt-delete-btn {
+      opacity: 1;
+    }
+
+    .gantt-add-btn {
+      color: #10b981;
+    }
+
+    .gantt-add-btn:hover {
+      background-color: #d1fae5;
+    }
+
+    .gantt-edit-btn {
+      color: #3b82f6;
+    }
+
+    .gantt-edit-btn:hover {
+      background-color: #dbeafe;
+    }
+
+    .gantt-delete-btn {
+      color: #ef4444;
+    }
+
+    .gantt-delete-btn:hover {
+      background-color: #fee2e2;
     }
 
     .gantt-dates-row {
@@ -895,20 +991,25 @@
           <div style="flex: 1; overflow-y: auto;">
             <div v-for="client in data.clients" :key="client.id" class="client-item">
               <div class="client-header-container">
-                <button 
+                <button
                   @click="toggleClient(client.id)"
-                  class="client-header" 
+                  class="client-header"
                   :class="{ collapsed: !expandedClients[client.id] }"
                 >
                   <span class="chevron">▼</span>
                   <span>{{ client.name }}</span>
                   <span class="client-count">({{ getProjectsForClient(client.id).length }})</span>
                 </button>
-                <button 
+                <button
                   @click="openEditClientModal(client)"
                   class="client-edit-btn"
                   title="クライアント名を編集"
                 >✏️</button>
+                <button
+                  @click="deleteClient(client)"
+                  class="client-delete-btn"
+                  title="クライアントを削除"
+                >🗑️</button>
               </div>
 
               <div v-if="expandedClients[client.id]" class="projects-list">
@@ -940,12 +1041,19 @@
           <div class="controls-bar">
             <div class="view-toggle">
               <label>表示モード:</label>
-              <button 
-                @click="viewMode = 'day'" 
-                class="view-btn" 
+              <button
+                @click="viewMode = 'day'"
+                class="view-btn"
                 :class="{ active: viewMode === 'day' }"
               >
                 日単位
+              </button>
+              <button
+                @click="viewMode = 'week'"
+                class="view-btn"
+                :class="{ active: viewMode === 'week' }"
+              >
+                週単位
               </button>
             </div>
             <div class="today-display">本日: {{ today }}</div>
@@ -981,7 +1089,7 @@
                         v-for="(date, idx) in headerDates"
                         :key="idx"
                         class="gantt-date-header"
-                        :class="{ today: idx === todayOffset }"
+                        :class="getDayClass(date, idx)"
                       >
                         {{ date.getDate() }}
                       </div>
@@ -993,14 +1101,18 @@
                   <template v-for="mainTask in currentMainTasks" :key="mainTask.id">
                     <!-- 大分類の行（タイトルのみ、タスクバーなし） -->
                     <div class="gantt-row">
-                      <div class="gantt-cell main-task">{{ mainTask.title }}</div>
+                      <div class="gantt-cell main-task">
+                        <span>{{ mainTask.title }}</span>
+                        <button @click="openAddSubtaskModal(mainTask.id)" class="gantt-add-btn" title="小分類を追加">+</button>
+                        <button @click="openEditMainTaskModal(mainTask)" class="gantt-edit-btn" title="編集">✏️</button>
+                        <button @click="deleteMainTask(mainTask)" class="gantt-delete-btn" title="削除">🗑️</button>
+                      </div>
                       <div class="gantt-dates-row">
                         <div
                           v-for="(date, idx) in headerDates"
                           :key="idx"
                           class="gantt-date-cell"
-                          :class="{ today: idx === todayOffset }"
-                          @click="onDateCellClick(date, mainTask.id)"
+                          :class="getDayClass(date, idx)"
                         ></div>
                       </div>
                     </div>
@@ -1062,6 +1174,11 @@
             <div class="form-group">
               <label>大分類</label>
               <div class="readonly-field">{{ getMainTaskTitle(editingTask.maintaskid) }}</div>
+            </div>
+
+            <div class="form-group">
+              <label>小分類</label>
+              <div class="readonly-field">{{ getSubtaskTitle(editingTask.subtaskid) }}</div>
             </div>
 
             <div class="form-group">
@@ -1154,7 +1271,7 @@
 
             <div class="form-group">
               <label>タスク名 *</label>
-              <input v-model="newTaskForm.title" type="text" placeholder="タスク名を入力" @keyup.enter="addTask">
+              <input v-model="newTaskForm.title" type="text" placeholder="タスク名を入力">
             </div>
 
             <div class="form-row">
@@ -1206,12 +1323,78 @@
           <div class="modal-content">
             <div class="form-group">
               <label>大分類名 *</label>
-              <input v-model="newMainTaskForm.title" type="text" placeholder="大分類名を入力（自由に入力可能）" @keyup.enter="addMainTask">
+              <input v-model="newMainTaskForm.title" type="text" placeholder="大分類名を入力（自由に入力可能）">
             </div>
 
             <div class="modal-actions">
               <button @click="addMainTask" class="btn btn-primary">追加</button>
               <button @click="showAddMainTaskModal = null" class="btn btn-secondary">キャンセル</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Add Subtask Modal -->
+      <div v-if="showAddSubtaskModal" class="modal-overlay" @click="showAddSubtaskModal = null">
+        <div class="modal" @click.stop>
+          <div class="modal-header">
+            <span>小分類を追加</span>
+            <button @click="showAddSubtaskModal = null" class="modal-close">✕</button>
+          </div>
+
+          <div class="modal-content">
+            <div class="form-group">
+              <label>小分類名 *</label>
+              <input v-model="newSubtaskForm.title" type="text" placeholder="小分類名を入力">
+            </div>
+
+            <div class="modal-actions">
+              <button @click="addSubtask" class="btn btn-primary">追加</button>
+              <button @click="showAddSubtaskModal = null" class="btn btn-secondary">キャンセル</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edit Main Task Modal -->
+      <div v-if="editingMainTask" class="modal-overlay" @click="editingMainTask = null">
+        <div class="modal" @click.stop>
+          <div class="modal-header">
+            <span>大分類を編集</span>
+            <button @click="editingMainTask = null" class="modal-close">✕</button>
+          </div>
+
+          <div class="modal-content">
+            <div class="form-group">
+              <label>大分類名</label>
+              <input v-model="editingMainTask.title" type="text">
+            </div>
+
+            <div class="modal-actions">
+              <button @click="updateMainTask" class="btn btn-primary">保存</button>
+              <button @click="editingMainTask = null" class="btn btn-secondary">キャンセル</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edit Subtask Modal -->
+      <div v-if="editingSubtask" class="modal-overlay" @click="editingSubtask = null">
+        <div class="modal" @click.stop>
+          <div class="modal-header">
+            <span>小分類を編集</span>
+            <button @click="editingSubtask = null" class="modal-close">✕</button>
+          </div>
+
+          <div class="modal-content">
+            <div class="form-group">
+              <label>小分類名</label>
+              <input v-model="editingSubtask.title" type="text">
+            </div>
+
+            <div class="modal-actions">
+              <button @click="updateSubtask" class="btn btn-primary">保存</button>
+              <button @click="editingSubtask = null" class="btn btn-secondary">キャンセル</button>
             </div>
           </div>
         </div>
@@ -1228,7 +1411,7 @@
           <div class="modal-content">
             <div class="form-group">
               <label>クライアント名 *</label>
-              <input v-model="newClientForm.name" type="text" placeholder="クライアント名を入力" @keyup.enter="addClient">
+              <input v-model="newClientForm.name" type="text" placeholder="クライアント名を入力">
             </div>
 
             <div class="modal-actions">
@@ -1250,7 +1433,7 @@
           <div class="modal-content">
             <div class="form-group">
               <label>クライアント名</label>
-              <input v-model="editingClient.name" type="text" @keyup.enter="updateClient">
+              <input v-model="editingClient.name" type="text">
             </div>
 
             <div class="modal-actions">
@@ -1272,7 +1455,7 @@
           <div class="modal-content">
             <div class="form-group">
               <label>案件名</label>
-              <input v-model="editingProject.name" type="text" @keyup.enter="updateProject">
+              <input v-model="editingProject.name" type="text">
             </div>
             <div class="form-group">
               <label>説明</label>
@@ -1313,6 +1496,7 @@
             clients: [],
             projects: [],
             maintasks: [],
+            subtasks: [],
             tasks: []
           },
           isLoading: true,
@@ -1325,7 +1509,10 @@
           expandedClients: {},
           showAddTaskModalForMain: null,
           showAddMainTaskModal: null,
+          showAddSubtaskModal: null,
           showAddClientModal: false,
+          editingMainTask: null,
+          editingSubtask: null,
           newTaskForm: {
             title: '',
             startdate: '',
@@ -1336,6 +1523,9 @@
             customMainTaskTitle: ''
           },
           newMainTaskForm: {
+            title: ''
+          },
+          newSubtaskForm: {
             title: ''
           },
           newClientForm: {
@@ -1371,8 +1561,22 @@
         },
         headerDates() {
           const dates = [];
-          const startDate = new Date(this.today);
-          startDate.setDate(startDate.getDate() - 30); // 過去30日から開始
+          let startDate;
+
+          // プロジェクトのタスクから最も早い日付を取得
+          if (this.projectTasks.length > 0) {
+            const earliestTask = this.projectTasks.reduce((earliest, task) => {
+              const taskDate = new Date(task.startdate);
+              return taskDate < new Date(earliest.startdate) ? task : earliest;
+            });
+            startDate = new Date(earliestTask.startdate);
+            startDate.setDate(startDate.getDate() - 7); // 最初のタスクの7日前から開始
+          } else {
+            // タスクがない場合は今日の30日前から開始
+            startDate = new Date(this.today);
+            startDate.setDate(startDate.getDate() - 30);
+          }
+
           for (let i = 0; i < 365; i++) { // 365日間表示
             const date = new Date(startDate);
             date.setDate(date.getDate() + i);
@@ -1381,8 +1585,8 @@
           return dates;
         },
         todayOffset() {
-          const startDate = new Date(this.today);
-          startDate.setDate(startDate.getDate() - 30); // 過去30日から開始
+          if (this.headerDates.length === 0) return 0;
+          const startDate = this.headerDates[0];
           const diffTime = new Date(this.today) - startDate;
           return Math.floor(diffTime / (1000 * 60 * 60 * 24));
         },
@@ -1414,16 +1618,18 @@
       methods: {
         async loadData() {
           try {
-            const [clientsRes, projectsRes, maintasksRes, tasksRes] = await Promise.all([
+            const [clientsRes, projectsRes, maintasksRes, subtasksRes, tasksRes] = await Promise.all([
               supabase.from('clients').select('*'),
               supabase.from('projects').select('*'),
               supabase.from('maintasks').select('*'),
+              supabase.from('subtasks').select('*'),
               supabase.from('tasks').select('*')
             ]);
 
             this.data.clients = clientsRes.data || [];
             this.data.projects = projectsRes.data || [];
             this.data.maintasks = maintasksRes.data || [];
+            this.data.subtasks = subtasksRes.data || [];
             this.data.tasks = tasksRes.data || [];
 
             this.expandedClients[this.data.clients[0]?.id] = true;
@@ -1446,11 +1652,20 @@
         getProjectsForClient(clientId) {
           return this.data.projects.filter(p => p.clientid === clientId);
         },
+        getSubtasksForMainTask(mainTaskId) {
+          return this.data.subtasks.filter(s => s.maintaskid === mainTaskId).sort((a, b) => a.order - b.order);
+        },
         getTasksForMainTask(mainTaskId) {
           return this.data.tasks.filter(t => t.maintaskid === mainTaskId);
         },
+        getTasksForSubtask(subtaskId) {
+          return this.data.tasks.filter(t => t.subtaskid === subtaskId);
+        },
         getMainTaskTitle(mainTaskId) {
           return this.data.maintasks.find(m => m.id === mainTaskId)?.title || '';
+        },
+        getSubtaskTitle(subtaskId) {
+          return this.data.subtasks.find(s => s.id === subtaskId)?.title || '';
         },
         getStatusLabel(status) {
           const labels = { pending: '未着手', 'in-progress': '進行中', completed: '完了' };
@@ -1459,26 +1674,68 @@
         toggleClient(clientId) {
           this.expandedClients[clientId] = !this.expandedClients[clientId];
         },
+        isSaturday(date) {
+          return date.getDay() === 6;
+        },
+        isSunday(date) {
+          return date.getDay() === 0;
+        },
+        isHoliday(date) {
+          // 日本の祝日の簡易判定（主要な祝日のみ）
+          const year = date.getFullYear();
+          const month = date.getMonth() + 1;
+          const day = date.getDate();
+
+          const holidays = {
+            '1-1': '元日',
+            '2-11': '建国記念の日',
+            '2-23': '天皇誕生日',
+            '3-20': '春分の日', // 固定（実際は年により変動）
+            '3-21': '春分の日', // 代替日
+            '4-29': '昭和の日',
+            '5-3': '憲法記念日',
+            '5-4': 'みどりの日',
+            '5-5': 'こどもの日',
+            '7-3': '海の日', // 第3月曜日（簡易判定）
+            '8-11': '山の日',
+            '9-3': '敬老の日', // 第3月曜日（簡易判定）
+            '9-23': '秋分の日', // 固定（実際は年により変動）
+            '10-2': 'スポーツの日', // 第2月曜日（簡易判定）
+            '11-3': '文化の日',
+            '11-23': '勤労感謝の日',
+            '12-31': '大晦日' // 慣習的な休日
+          };
+
+          const key = `${month}-${day}`;
+          return holidays[key] !== undefined;
+        },
+        getDayClass(date, idx) {
+          const classes = [];
+          if (idx === this.todayOffset) classes.push('today');
+          if (this.isSaturday(date)) classes.push('saturday');
+          if (this.isSunday(date)) classes.push('sunday');
+          if (this.isHoliday(date)) classes.push('holiday');
+          return classes.join(' ');
+        },
         isTaskStartDate(task, date) {
           if (!date) return false;
           const taskStart = new Date(task.startdate);
           return date.toDateString() === taskStart.toDateString();
         },
         taskStartIndex(task) {
+          if (this.headerDates.length === 0) return 0;
           const taskStart = new Date(task.startdate);
-          const startDate = new Date(this.today);
-          startDate.setDate(startDate.getDate() - 30); // 過去30日から開始
+          const startDate = this.headerDates[0];
           const diffTime = taskStart - startDate;
           return Math.floor(diffTime / (1000 * 60 * 60 * 24));
         },
-        getTaskBarStyle(task) {
+        getTaskBarStyle(task, subtaskId) {
           const start = new Date(task.startdate);
           const end = new Date(task.enddate);
           const days = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
           const width = Math.max(32, days * 32 - 8);
           const taskStart = new Date(task.startdate);
-          const startDate = new Date(this.today);
-          startDate.setDate(startDate.getDate() - 30); // 過去30日から開始
+          const startDate = this.headerDates[0] || new Date();
           const left = Math.floor((taskStart - startDate) / (1000 * 60 * 60 * 24)) * 32;
 
           return {
@@ -1633,6 +1890,139 @@
             alert('大分類の追加に失敗しました');
           }
         },
+        openEditMainTaskModal(mainTask) {
+          this.editingMainTask = { ...mainTask };
+        },
+        async updateMainTask() {
+          if (!this.editingMainTask.title.trim()) {
+            alert('大分類名を入力してください');
+            return;
+          }
+          try {
+            const { error } = await supabase
+              .from('maintasks')
+              .update({ title: this.editingMainTask.title })
+              .eq('id', this.editingMainTask.id);
+
+            if (error) throw error;
+
+            const index = this.data.maintasks.findIndex(m => m.id === this.editingMainTask.id);
+            if (index !== -1) {
+              this.data.maintasks[index].title = this.editingMainTask.title;
+            }
+            this.editingMainTask = null;
+          } catch (error) {
+            console.error('更新エラー:', error);
+            alert('大分類の更新に失敗しました');
+          }
+        },
+        async deleteMainTask(mainTask) {
+          if (confirm(`「${mainTask.title}」とその中の小分類・タスクをすべて削除しますか？`)) {
+            try {
+              // 大分類に紐づく小分類のIDを取得
+              const subtaskIds = this.data.subtasks.filter(s => s.maintaskid === mainTask.id).map(s => s.id);
+
+              // タスクを削除
+              if (subtaskIds.length > 0) {
+                await supabase.from('tasks').delete().in('subtaskid', subtaskIds);
+              }
+              await supabase.from('tasks').delete().eq('maintaskid', mainTask.id);
+
+              // 小分類を削除
+              await supabase.from('subtasks').delete().eq('maintaskid', mainTask.id);
+
+              // 大分類を削除
+              const { error } = await supabase.from('maintasks').delete().eq('id', mainTask.id);
+              if (error) throw error;
+
+              // ローカルデータから削除
+              this.data.maintasks = this.data.maintasks.filter(m => m.id !== mainTask.id);
+              this.data.subtasks = this.data.subtasks.filter(s => s.maintaskid !== mainTask.id);
+              this.data.tasks = this.data.tasks.filter(t => t.maintaskid !== mainTask.id || subtaskIds.includes(t.subtaskid));
+            } catch (error) {
+              console.error('削除エラー:', error);
+              alert('大分類の削除に失敗しました');
+            }
+          }
+        },
+        openAddSubtaskModal(mainTaskId) {
+          this.showAddSubtaskModal = mainTaskId;
+          this.newSubtaskForm.title = '';
+        },
+        async addSubtask() {
+          if (!this.newSubtaskForm.title.trim() || !this.showAddSubtaskModal) {
+            alert('小分類名を入力してください');
+            return;
+          }
+          try {
+            const maxOrder = Math.max(...this.data.subtasks.filter(s => s.maintaskid === this.showAddSubtaskModal).map(s => s.order), 0);
+            const newId = generateUUID();
+            const newSubtask = {
+              id: newId,
+              maintaskid: this.showAddSubtaskModal,
+              title: this.newSubtaskForm.title,
+              order: maxOrder + 1
+            };
+
+            const { error } = await supabase
+              .from('subtasks')
+              .insert([newSubtask]);
+
+            if (error) throw error;
+
+            this.data.subtasks.push(newSubtask);
+            this.showAddSubtaskModal = null;
+            this.newSubtaskForm = { title: '' };
+          } catch (error) {
+            console.error('追加エラー:', error);
+            alert('小分類の追加に失敗しました');
+          }
+        },
+        openEditSubtaskModal(subtask) {
+          this.editingSubtask = { ...subtask };
+        },
+        async updateSubtask() {
+          if (!this.editingSubtask.title.trim()) {
+            alert('小分類名を入力してください');
+            return;
+          }
+          try {
+            const { error } = await supabase
+              .from('subtasks')
+              .update({ title: this.editingSubtask.title })
+              .eq('id', this.editingSubtask.id);
+
+            if (error) throw error;
+
+            const index = this.data.subtasks.findIndex(s => s.id === this.editingSubtask.id);
+            if (index !== -1) {
+              this.data.subtasks[index].title = this.editingSubtask.title;
+            }
+            this.editingSubtask = null;
+          } catch (error) {
+            console.error('更新エラー:', error);
+            alert('小分類の更新に失敗しました');
+          }
+        },
+        async deleteSubtask(subtask) {
+          if (confirm(`「${subtask.title}」とその中のタスクをすべて削除しますか？`)) {
+            try {
+              // 小分類に紐づくタスクを削除
+              await supabase.from('tasks').delete().eq('subtaskid', subtask.id);
+
+              // 小分類を削除
+              const { error } = await supabase.from('subtasks').delete().eq('id', subtask.id);
+              if (error) throw error;
+
+              // ローカルデータから削除
+              this.data.subtasks = this.data.subtasks.filter(s => s.id !== subtask.id);
+              this.data.tasks = this.data.tasks.filter(t => t.subtaskid !== subtask.id);
+            } catch (error) {
+              console.error('削除エラー:', error);
+              alert('小分類の削除に失敗しました');
+            }
+          }
+        },
         openAddClientModal() {
           this.showAddClientModal = true;
           this.newClientForm.name = '';
@@ -1690,6 +2080,59 @@
             alert('クライアント名の更新に失敗しました');
           }
         },
+        async deleteClient(client) {
+          if (confirm(`「${client.name}」とそのすべての案件・タスクを削除しますか？この操作は取り消せません。`)) {
+            try {
+              // クライアントに紐づく案件を取得
+              const projectIds = this.data.projects.filter(p => p.clientid === client.id).map(p => p.id);
+
+              if (projectIds.length > 0) {
+                // 案件に紐づく大分類を取得
+                const mainTaskIds = this.data.maintasks.filter(m => projectIds.includes(m.projectid)).map(m => m.id);
+
+                if (mainTaskIds.length > 0) {
+                  // 大分類に紐づく小分類を取得
+                  const subtaskIds = this.data.subtasks.filter(s => mainTaskIds.includes(s.maintaskid)).map(s => s.id);
+
+                  // タスクを削除
+                  if (subtaskIds.length > 0) {
+                    await supabase.from('tasks').delete().in('subtaskid', subtaskIds);
+                  }
+                  await supabase.from('tasks').delete().in('maintaskid', mainTaskIds);
+
+                  // 小分類を削除
+                  await supabase.from('subtasks').delete().in('maintaskid', mainTaskIds);
+
+                  // 大分類を削除
+                  await supabase.from('maintasks').delete().in('projectid', projectIds);
+                }
+
+                // 案件を削除
+                await supabase.from('projects').delete().in('id', projectIds);
+              }
+
+              // クライアントを削除
+              const { error } = await supabase.from('clients').delete().eq('id', client.id);
+              if (error) throw error;
+
+              // ローカルデータから削除
+              this.data.clients = this.data.clients.filter(c => c.id !== client.id);
+              this.data.projects = this.data.projects.filter(p => p.clientid !== client.id);
+              const mainTaskIds = this.data.maintasks.filter(m => projectIds.includes(m.projectid)).map(m => m.id);
+              this.data.maintasks = this.data.maintasks.filter(m => !projectIds.includes(m.projectid));
+              this.data.subtasks = this.data.subtasks.filter(s => !mainTaskIds.includes(s.maintaskid));
+              this.data.tasks = this.data.tasks.filter(t => !mainTaskIds.includes(t.maintaskid));
+
+              // 選択中のプロジェクトが削除された場合、最初のプロジェクトを選択
+              if (projectIds.includes(this.selectedProject)) {
+                this.selectedProject = this.data.projects[0]?.id || null;
+              }
+            } catch (error) {
+              console.error('削除エラー:', error);
+              alert('クライアントの削除に失敗しました');
+            }
+          }
+        },
         openEditProjectModal(project) {
           this.editingProject = { ...project };
         },
@@ -1718,7 +2161,7 @@
           }
         },
         // ガントチャート内でタスクを追加
-        async onDateCellClick(date, mainTaskId) {
+        async onDateCellClick(date, subtaskId) {
           if (this.draggingTask || this.resizingTask) return; // ドラッグ中は無効
 
           const startDate = date.toISOString().split('T')[0];
@@ -1729,9 +2172,11 @@
 
           try {
             const newId = generateUUID();
+            const subtask = this.data.subtasks.find(s => s.id === subtaskId);
             const newTask = {
               id: newId,
-              maintaskid: mainTaskId,
+              maintaskid: subtask?.maintaskid || null,
+              subtaskid: subtaskId,
               title: '新しいタスク',
               startdate: startDate,
               enddate: endDate,
@@ -1830,6 +2275,16 @@
         // マウスイベントリスナーを追加
         document.addEventListener('mousemove', this.onMouseMove);
         document.addEventListener('mouseup', this.onMouseUp);
+
+        // ガントチャートを今日の日付にスクロール
+        this.$nextTick(() => {
+          if (this.$refs.ganttContainer) {
+            const todayPosition = this.todayOffset * 32; // 32pxは1日分の幅
+            const containerWidth = this.$refs.ganttContainer.clientWidth;
+            const scrollPosition = todayPosition - containerWidth / 2 + 16; // 画面中央に表示
+            this.$refs.ganttContainer.scrollLeft = Math.max(0, scrollPosition);
+          }
+        });
       },
       beforeUnmount() {
         // イベントリスナーを削除
