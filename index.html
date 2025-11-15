@@ -503,6 +503,10 @@
       background-color: #f8fafc;
     }
 
+    .gantt-row.drag-over {
+      border-top: 3px solid #3b82f6;
+    }
+
     .gantt-cell {
       width: 192px;
       padding: 12px;
@@ -1068,32 +1072,56 @@
               </div>
               <div class="gantt-container" ref="ganttContainer">
                 <div class="gantt-header">
-                  <!-- 月表示行 -->
+                  <!-- 月/週表示行 -->
                   <div class="gantt-header-row gantt-month-row">
                     <div class="gantt-header-cell">タスク</div>
                     <div class="gantt-dates-header">
-                      <div
-                        v-for="(group, idx) in monthGroups"
-                        :key="idx"
-                        class="gantt-month-header"
-                        :style="{ width: (group.count * 32) + 'px' }"
-                      >
-                        {{ group.label }}
-                      </div>
+                      <template v-if="viewMode === 'day'">
+                        <div
+                          v-for="(group, idx) in monthGroups"
+                          :key="idx"
+                          class="gantt-month-header"
+                          :style="{ width: (group.count * 32) + 'px' }"
+                        >
+                          {{ group.label }}
+                        </div>
+                      </template>
+                      <template v-else>
+                        <div
+                          v-for="(group, idx) in weekGroups"
+                          :key="idx"
+                          class="gantt-month-header"
+                          :style="{ width: (group.count * 224) + 'px' }"
+                        >
+                          {{ group.label }}
+                        </div>
+                      </template>
                     </div>
                   </div>
-                  <!-- 日表示行 -->
+                  <!-- 日/週表示行 -->
                   <div class="gantt-header-row gantt-day-row">
                     <div class="gantt-header-cell" style="border-top: 1px solid #e2e8f0;"></div>
                     <div class="gantt-dates-header">
-                      <div
-                        v-for="(date, idx) in headerDates"
-                        :key="idx"
-                        class="gantt-date-header"
-                        :class="getDayClass(date, idx)"
-                      >
-                        {{ date.getDate() }}
-                      </div>
+                      <template v-if="viewMode === 'day'">
+                        <div
+                          v-for="(date, idx) in headerDates"
+                          :key="idx"
+                          class="gantt-date-header"
+                          :class="getDayClass(date, idx)"
+                        >
+                          {{ date.getDate() }}
+                        </div>
+                      </template>
+                      <template v-else>
+                        <div
+                          v-for="(week, idx) in displayDates"
+                          :key="idx"
+                          class="gantt-date-header"
+                          :style="{ width: '224px' }"
+                        >
+                          {{ getWeekLabel(week) }}
+                        </div>
+                      </template>
                     </div>
                   </div>
                 </div>
@@ -1101,39 +1129,80 @@
                 <div class="gantt-body">
                   <template v-for="mainTask in currentMainTasks" :key="mainTask.id">
                     <!-- 大分類の行（ヘッダーのみ、タスクバーなし） -->
-                    <div class="gantt-row">
-                      <div class="gantt-cell main-task">
-                        <span>{{ mainTask.title }}</span>
+                    <div
+                      class="gantt-row"
+                      :class="{ 'drag-over': dragOverItem === mainTask.id }"
+                    >
+                      <div
+                        class="gantt-cell main-task"
+                        draggable="true"
+                        @dragstart="startDraggingMainTask($event, mainTask)"
+                        @dragover.prevent="onDragOverMainTask($event, mainTask)"
+                        @drop="onDropMainTask($event, mainTask)"
+                        @dragend="endDragging"
+                      >
+                        <span style="cursor: move;">☰ {{ mainTask.title }}</span>
                         <button @click="openAddSubtaskModal(mainTask.id)" class="gantt-add-btn" title="小分類を追加">+</button>
                         <button @click="openEditMainTaskModal(mainTask)" class="gantt-edit-btn" title="編集">✏️</button>
                         <button @click="deleteMainTask(mainTask)" class="gantt-delete-btn" title="削除">🗑️</button>
                       </div>
                       <div class="gantt-dates-row">
-                        <div
-                          v-for="(date, idx) in headerDates"
-                          :key="idx"
-                          class="gantt-date-cell"
-                          :class="getDayClass(date, idx)"
-                        ></div>
-                      </div>
-                    </div>
-
-                    <!-- 小分類の行（各小分類ごとにタスクバーを表示） -->
-                    <template v-for="subtask in getSubtasksForMainTask(mainTask.id)" :key="subtask.id">
-                      <div class="gantt-row">
-                        <div class="gantt-cell sub-task">
-                          <span>{{ subtask.title }}</span>
-                          <button @click="openEditSubtaskModal(subtask)" class="gantt-edit-btn" title="編集">✏️</button>
-                          <button @click="deleteSubtask(subtask)" class="gantt-delete-btn" title="削除">🗑️</button>
-                        </div>
-                        <div class="gantt-dates-row">
+                        <template v-if="viewMode === 'day'">
                           <div
                             v-for="(date, idx) in headerDates"
                             :key="idx"
                             class="gantt-date-cell"
                             :class="getDayClass(date, idx)"
-                            @click="onDateCellClick(date, subtask.id)"
                           ></div>
+                        </template>
+                        <template v-else>
+                          <div
+                            v-for="(week, idx) in displayDates"
+                            :key="idx"
+                            class="gantt-date-cell"
+                            :style="{ width: '224px' }"
+                          ></div>
+                        </template>
+                      </div>
+                    </div>
+
+                    <!-- 小分類の行（各小分類ごとにタスクバーを表示） -->
+                    <template v-for="subtask in getSubtasksForMainTask(mainTask.id)" :key="subtask.id">
+                      <div
+                        class="gantt-row"
+                        :class="{ 'drag-over': dragOverItem === subtask.id }"
+                      >
+                        <div
+                          class="gantt-cell sub-task"
+                          draggable="true"
+                          @dragstart="startDraggingSubtask($event, subtask)"
+                          @dragover.prevent="onDragOverSubtask($event, subtask)"
+                          @drop="onDropSubtask($event, subtask)"
+                          @dragend="endDragging"
+                        >
+                          <span style="cursor: move;">☰ {{ subtask.title }}</span>
+                          <button @click="openEditSubtaskModal(subtask)" class="gantt-edit-btn" title="編集">✏️</button>
+                          <button @click="deleteSubtask(subtask)" class="gantt-delete-btn" title="削除">🗑️</button>
+                        </div>
+                        <div class="gantt-dates-row">
+                          <template v-if="viewMode === 'day'">
+                            <div
+                              v-for="(date, idx) in headerDates"
+                              :key="idx"
+                              class="gantt-date-cell"
+                              :class="getDayClass(date, idx)"
+                              @click="onDateCellClick(date, subtask.id)"
+                            ></div>
+                          </template>
+                          <template v-else>
+                            <div
+                              v-for="(week, idx) in displayDates"
+                              :key="idx"
+                              class="gantt-date-cell"
+                              :style="{ width: '224px' }"
+                              @click="onDateCellClick(week, subtask.id)"
+                            ></div>
+                          </template>
                           <!-- 小分類に属するすべてのタスクバーを表示 -->
                           <div class="gantt-bars-container">
                             <template v-for="task in getTasksForSubtask(subtask.id)" :key="task.id">
@@ -1543,7 +1612,10 @@
           resizingTask: null,
           dragStartX: 0,
           dragStartDate: null,
-          resizeStartWidth: 0
+          resizeStartWidth: 0,
+          draggingMainTask: null,
+          draggingSubtask: null,
+          dragOverItem: null
         };
       },
       computed: {
@@ -1621,6 +1693,61 @@
           }
 
           return groups;
+        },
+        weekGroups() {
+          const weeks = [];
+          if (this.headerDates.length === 0) return weeks;
+
+          let currentWeekStart = null;
+          let currentWeek = null;
+
+          this.headerDates.forEach((date, idx) => {
+            const weekStart = this.getWeekStart(date);
+            const weekKey = weekStart.toISOString().split('T')[0];
+
+            if (weekKey !== currentWeekStart) {
+              if (currentWeek) {
+                weeks.push(currentWeek);
+              }
+              currentWeekStart = weekKey;
+              currentWeek = {
+                label: this.getWeekLabel(weekStart),
+                count: 1,
+                startDate: weekStart
+              };
+            } else {
+              currentWeek.count++;
+            }
+          });
+
+          if (currentWeek) {
+            weeks.push(currentWeek);
+          }
+
+          return weeks;
+        },
+        displayDates() {
+          if (this.viewMode === 'week') {
+            // 週単位表示の場合は週の開始日のみを表示
+            const weeks = [];
+            let currentWeekStart = null;
+
+            this.headerDates.forEach(date => {
+              const weekStart = this.getWeekStart(date);
+              const weekKey = weekStart.toISOString().split('T')[0];
+
+              if (weekKey !== currentWeekStart) {
+                weeks.push(weekStart);
+                currentWeekStart = weekKey;
+              }
+            });
+
+            return weeks;
+          }
+          return this.headerDates;
+        },
+        cellWidth() {
+          return this.viewMode === 'week' ? 224 : 32; // 週単位は224px、日単位は32px
         }
       },
       methods: {
@@ -1717,6 +1844,19 @@
           if (this.isHoliday(date)) classes.push('holiday');
           return classes.join(' ');
         },
+        getWeekStart(date) {
+          const d = new Date(date);
+          const day = d.getDay();
+          const diff = day === 0 ? -6 : 1 - day; // 月曜日を週の開始とする
+          d.setDate(d.getDate() + diff);
+          d.setHours(0, 0, 0, 0);
+          return d;
+        },
+        getWeekLabel(weekStart) {
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekEnd.getDate() + 6);
+          return `${weekStart.getMonth() + 1}/${weekStart.getDate()}-${weekEnd.getMonth() + 1}/${weekEnd.getDate()}`;
+        },
         isTaskStartDate(task, date) {
           if (!date) return false;
           const taskStart = new Date(task.startdate);
@@ -1732,11 +1872,26 @@
         getTaskBarStyle(task, subtaskId) {
           const start = new Date(task.startdate);
           const end = new Date(task.enddate);
-          const days = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
-          const width = Math.max(32, days * 32 - 8);
           const taskStart = new Date(task.startdate);
           const startDate = this.headerDates[0] || new Date();
-          const left = Math.floor((taskStart - startDate) / (1000 * 60 * 60 * 24)) * 32;
+
+          let width, left;
+
+          if (this.viewMode === 'week') {
+            // 週単位表示
+            const weeks = Math.ceil((end - start) / (1000 * 60 * 60 * 24 * 7));
+            width = Math.max(224, weeks * 224 - 16);
+
+            const weekStart = this.getWeekStart(startDate);
+            const taskWeekStart = this.getWeekStart(taskStart);
+            const weeksDiff = Math.floor((taskWeekStart - weekStart) / (1000 * 60 * 60 * 24 * 7));
+            left = weeksDiff * 224;
+          } else {
+            // 日単位表示
+            const days = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+            width = Math.max(32, days * 32 - 8);
+            left = Math.floor((taskStart - startDate) / (1000 * 60 * 60 * 24)) * 32;
+          }
 
           // 同じ小分類の他のタスクと重ならないように垂直位置を計算
           const tasksInSameRow = this.data.tasks.filter(t => t.subtaskid === subtaskId);
@@ -2295,6 +2450,118 @@
             console.error('日付保存エラー:', error);
             alert('日付の保存に失敗しました');
           }
+        },
+        // 大分類のドラッグ開始
+        startDraggingMainTask(e, mainTask) {
+          this.draggingMainTask = mainTask;
+          e.dataTransfer.effectAllowed = 'move';
+        },
+        // 大分類のドラッグオーバー
+        onDragOverMainTask(e, mainTask) {
+          if (!this.draggingMainTask || this.draggingMainTask.id === mainTask.id) return;
+          this.dragOverItem = mainTask.id;
+        },
+        // 大分類のドロップ
+        async onDropMainTask(e, targetMainTask) {
+          if (!this.draggingMainTask || this.draggingMainTask.id === targetMainTask.id) return;
+
+          try {
+            // 同じプロジェクト内の大分類のみ並び替え可能
+            if (this.draggingMainTask.projectid !== targetMainTask.projectid) {
+              alert('同じプロジェクト内でのみ並び替えが可能です');
+              return;
+            }
+
+            const projectMainTasks = this.currentMainTasks.slice();
+            const dragIndex = projectMainTasks.findIndex(m => m.id === this.draggingMainTask.id);
+            const dropIndex = projectMainTasks.findIndex(m => m.id === targetMainTask.id);
+
+            // 配列内で位置を入れ替え
+            projectMainTasks.splice(dragIndex, 1);
+            projectMainTasks.splice(dropIndex, 0, this.draggingMainTask);
+
+            // orderを再計算
+            const updates = projectMainTasks.map((m, index) => ({
+              id: m.id,
+              order: index
+            }));
+
+            // データベースを更新
+            for (const update of updates) {
+              await supabase
+                .from('maintasks')
+                .update({ order: update.order })
+                .eq('id', update.id);
+
+              // ローカルデータも更新
+              const localTask = this.data.maintasks.find(m => m.id === update.id);
+              if (localTask) localTask.order = update.order;
+            }
+
+            this.dragOverItem = null;
+          } catch (error) {
+            console.error('並び替えエラー:', error);
+            alert('並び替えに失敗しました');
+          }
+        },
+        // 小分類のドラッグ開始
+        startDraggingSubtask(e, subtask) {
+          this.draggingSubtask = subtask;
+          e.dataTransfer.effectAllowed = 'move';
+        },
+        // 小分類のドラッグオーバー
+        onDragOverSubtask(e, subtask) {
+          if (!this.draggingSubtask || this.draggingSubtask.id === subtask.id) return;
+          this.dragOverItem = subtask.id;
+        },
+        // 小分類のドロップ
+        async onDropSubtask(e, targetSubtask) {
+          if (!this.draggingSubtask || this.draggingSubtask.id === targetSubtask.id) return;
+
+          try {
+            // 同じ大分類内の小分類のみ並び替え可能
+            if (this.draggingSubtask.maintaskid !== targetSubtask.maintaskid) {
+              alert('同じ大分類内でのみ並び替えが可能です');
+              return;
+            }
+
+            const mainTaskSubtasks = this.getSubtasksForMainTask(targetSubtask.maintaskid);
+            const dragIndex = mainTaskSubtasks.findIndex(s => s.id === this.draggingSubtask.id);
+            const dropIndex = mainTaskSubtasks.findIndex(s => s.id === targetSubtask.id);
+
+            // 配列内で位置を入れ替え
+            mainTaskSubtasks.splice(dragIndex, 1);
+            mainTaskSubtasks.splice(dropIndex, 0, this.draggingSubtask);
+
+            // orderを再計算
+            const updates = mainTaskSubtasks.map((s, index) => ({
+              id: s.id,
+              order: index
+            }));
+
+            // データベースを更新
+            for (const update of updates) {
+              await supabase
+                .from('subtasks')
+                .update({ order: update.order })
+                .eq('id', update.id);
+
+              // ローカルデータも更新
+              const localSubtask = this.data.subtasks.find(s => s.id === update.id);
+              if (localSubtask) localSubtask.order = update.order;
+            }
+
+            this.dragOverItem = null;
+          } catch (error) {
+            console.error('並び替えエラー:', error);
+            alert('並び替えに失敗しました');
+          }
+        },
+        // ドラッグ終了
+        endDragging() {
+          this.draggingMainTask = null;
+          this.draggingSubtask = null;
+          this.dragOverItem = null;
         }
       },
       watch: {
