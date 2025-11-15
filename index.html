@@ -423,12 +423,13 @@
       text-align: left;
       font-weight: 600;
       color: #64748b;
-      border-right: 1px solid #e2e8f0;
+      border-right: 2px solid #cbd5e1;
       flex-shrink: 0;
       position: sticky;
       left: 0;
       background-color: #f1f5f9;
       z-index: 20;
+      box-shadow: 2px 0 4px rgba(0,0,0,0.05);
     }
 
     .gantt-dates-header {
@@ -514,7 +515,7 @@
     .gantt-cell {
       width: 192px;
       padding: 12px;
-      border-right: 1px solid #e2e8f0;
+      border-right: 2px solid #cbd5e1;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -525,6 +526,7 @@
       left: 0;
       background-color: white;
       z-index: 5;
+      box-shadow: 2px 0 4px rgba(0,0,0,0.05);
     }
 
     .gantt-cell.main-task {
@@ -534,6 +536,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      border-right: 2px solid #cbd5e1;
     }
 
     .gantt-cell.main-task span {
@@ -565,6 +568,8 @@
       position: sticky;
       left: 0;
       z-index: 5;
+      border-right: 2px solid #cbd5e1;
+      box-shadow: 2px 0 4px rgba(0,0,0,0.05);
     }
 
     .gantt-cell.subtask-header span {
@@ -663,6 +668,19 @@
       right: 0;
       height: 32px;
       pointer-events: none;
+    }
+
+    .gantt-bars-container-multi {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .subtask-row-with-tasks {
+      min-height: 76px !important;
     }
 
     .gantt-bar {
@@ -1182,7 +1200,8 @@
           <div v-if="viewMode === 'day'" class="gantt-section">
             <div class="gantt-section-inner">
               <div class="gantt-title-row">
-                <h2 class="gantt-title">ガントチャート</h2>
+<h2 class="gantt-title">ガントチャート</h2>
+                <button @click="openAddMainTaskModal(selectedProject)" class="gantt-title-btn" title="大分類を追加">+ 大分類追加</button>
                 <button @click="openAddTaskModal(currentMainTasks[0]?.id)" class="gantt-title-btn" title="タスクを追加">+ タスク追加</button>
               </div>
               <div class="gantt-container" ref="ganttContainer">
@@ -1282,13 +1301,14 @@
                     <!-- 小分類の行 -->
                     <template v-for="subtask in getSubtasksForMainTask(mainTask.id)" :key="subtask.id">
                       <div
-                        class="gantt-row"
+                        class="gantt-row subtask-row-with-tasks"
                         :class="{ 'drag-over': dragOverItem === subtask.id }"
                         draggable="true"
                         @dragstart="startDraggingSubtask($event, subtask)"
                         @dragover.prevent="onDragOverSubtask($event, subtask)"
                         @drop="onDropSubtask($event, subtask)"
                         @dragend="draggingSubtask = null; dragOverItem = null"
+                        :style="{ minHeight: (getTasksForSubtask(subtask.id).length * 36 + 40) + 'px' }"
                       >
                         <div class="gantt-cell subtask-header">
                           <span>{{ subtask.title }}</span>
@@ -1314,51 +1334,27 @@
                               :style="{ width: '224px' }"
                             ></div>
                           </template>
-                        </div>
-                      </div>
-
-                      <!-- 小分類に属するタスクの行 -->
-                      <template v-for="task in getTasksForSubtask(subtask.id)" :key="task.id">
-                        <div class="gantt-row">
-                          <div class="gantt-cell task-item">{{ task.title }}</div>
-                          <div class="gantt-dates-row">
-                            <template v-if="viewMode === 'day'">
+                          <!-- 小分類に属するすべてのタスクバーを表示 -->
+                          <div class="gantt-bars-container-multi">
+                            <div
+                              v-for="(task, taskIdx) in getTasksForSubtask(subtask.id)"
+                              :key="task.id"
+                              class="gantt-bar"
+                              :class="task.status"
+                              :style="getTaskBarStyleWithOffset(task, taskIdx)"
+                              :title="task.title"
+                              @mousedown="startDraggingTask($event, task)"
+                              @click="selectedTaskForDetail = task"
+                            >
+                              {{ task.title }}
                               <div
-                                v-for="(date, idx) in headerDates"
-                                :key="idx"
-                                class="gantt-date-cell"
-                                :class="getDayClass(date, idx)"
+                                class="gantt-bar-resize-handle"
+                                @mousedown.stop="startResizingTask($event, task)"
                               ></div>
-                            </template>
-                            <template v-else>
-                              <div
-                                v-for="(week, idx) in displayDates"
-                                :key="idx"
-                                class="gantt-date-cell"
-                                :style="{ width: '224px' }"
-                              ></div>
-                            </template>
-                            <!-- タスクバーを表示 -->
-                            <div class="gantt-bars-container">
-                              <div
-                                v-if="isTaskStartDate(task, headerDates[taskStartIndex(task)])"
-                                class="gantt-bar"
-                                :class="task.status"
-                                :style="getTaskBarStyle(task)"
-                                :title="task.title"
-                                @mousedown="startDraggingTask($event, task)"
-                                @click="selectedTaskForDetail = task"
-                              >
-                                {{ task.title }}
-                                <div
-                                  class="gantt-bar-resize-handle"
-                                  @mousedown.stop="startResizingTask($event, task)"
-                                ></div>
-                              </div>
                             </div>
                           </div>
                         </div>
-                      </template>
+                      </div>
                     </template>
                   </template>
                 </div>
@@ -2090,6 +2086,12 @@
             width: width + 'px',
             top: '0px'
           };
+        },
+        getTaskBarStyleWithOffset(task, taskIdx) {
+          const baseStyle = this.getTaskBarStyle(task);
+          // 各タスクを36px下にずらす
+          baseStyle.top = (taskIdx * 36 + 4) + 'px';
+          return baseStyle;
         },
         async saveTask() {
           try {
