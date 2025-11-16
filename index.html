@@ -417,38 +417,65 @@
 
     .gantt-container {
       flex: 1;
-      overflow: auto;
+      display: flex;
+      flex-direction: column;
       border: 1px solid #e2e8f0;
       border-radius: 8px;
       background-color: white;
       position: relative;
+      overflow: hidden;
+    }
+
+    .gantt-wrapper {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
     }
 
     .gantt-header {
-      position: sticky;
-      top: 0;
-      z-index: 10;
+      display: flex;
       background-color: #f1f5f9;
       border-bottom: 1px solid #e2e8f0;
+      flex-shrink: 0;
+    }
+
+    .gantt-header-fixed {
+      flex-shrink: 0;
+      width: 192px;
+      border-right: 2px solid #cbd5e1;
+      background-color: #f1f5f9;
+    }
+
+    .gantt-header-scroll {
+      flex: 1;
+      overflow-x: auto;
+      overflow-y: hidden;
+      /* スクロールバーを非表示 */
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .gantt-header-scroll::-webkit-scrollbar {
+      display: none;
     }
 
     .gantt-header-row {
       display: flex;
+      flex-direction: column;
+    }
+
+    .gantt-header-dates-row {
+      display: flex;
     }
 
     .gantt-header-cell {
-      width: 192px;
       padding: 12px;
       text-align: left;
       font-weight: 600;
       color: #64748b;
-      border-right: 2px solid #cbd5e1;
-      flex-shrink: 0;
-      position: sticky;
-      left: 0;
       background-color: #f1f5f9;
-      z-index: 20;
-      box-shadow: 2px 0 4px rgba(0,0,0,0.05);
+      border-bottom: 1px solid #e2e8f0;
     }
 
     .gantt-dates-header {
@@ -516,13 +543,26 @@
       background-color: #fef2f2;
     }
 
-    .gantt-body {
+    .gantt-body-fixed {
+      flex-shrink: 0;
+      width: 192px;
+      background-color: white;
+      border-right: 2px solid #cbd5e1;
+      overflow: hidden;
+    }
+
+    .gantt-body-scroll {
+      flex: 1;
+      overflow-x: auto;
+      overflow-y: auto;
+    }
+
+    .gantt-rows-container {
       display: flex;
       flex-direction: column;
     }
 
     .gantt-row {
-      display: flex;
       border-bottom: 1px solid #f1f5f9;
       min-height: 40px;
       position: relative;
@@ -537,20 +577,14 @@
     }
 
     .gantt-cell {
-      width: 192px;
       padding: 12px;
-      border-right: 2px solid #cbd5e1;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      flex-shrink: 0;
       display: flex;
       align-items: center;
-      position: sticky;
-      left: 0;
       background-color: white;
-      z-index: 5;
-      box-shadow: 2px 0 4px rgba(0,0,0,0.05);
+      min-height: 40px;
     }
 
     .gantt-cell.main-task {
@@ -1239,160 +1273,193 @@
                 <button @click="openAddTaskModal(currentMainTasks[0]?.id)" class="gantt-title-btn" title="タスクを追加">+ タスク追加</button>
               </div>
               <div class="gantt-container" ref="ganttContainer">
+                <!-- ヘッダー部分 -->
                 <div class="gantt-header">
-                  <!-- 月/週表示行 -->
-                  <div class="gantt-header-row gantt-month-row">
-                    <div class="gantt-header-cell">タスク</div>
-                    <div class="gantt-dates-header">
-                      <template v-if="viewMode === 'day'">
-                        <div
-                          v-for="(group, idx) in monthGroups"
-                          :key="idx"
-                          class="gantt-month-header"
-                          :style="{ width: (group.count * 32) + 'px' }"
-                        >
-                          {{ group.label }}
-                        </div>
-                      </template>
-                      <template v-else>
-                        <div
-                          v-for="(group, idx) in weekGroups"
-                          :key="idx"
-                          class="gantt-month-header"
-                          :style="{ width: (group.count * 224) + 'px' }"
-                        >
-                          {{ group.label }}
-                        </div>
-                      </template>
+                  <!-- 固定列のヘッダー -->
+                  <div class="gantt-header-fixed">
+                    <div class="gantt-header-row">
+                      <div class="gantt-header-cell">タスク</div>
+                      <div class="gantt-header-cell" style="border-top: 1px solid #e2e8f0;"></div>
                     </div>
                   </div>
-                  <!-- 日/週表示行 -->
-                  <div class="gantt-header-row gantt-day-row">
-                    <div class="gantt-header-cell" style="border-top: 1px solid #e2e8f0;"></div>
-                    <div class="gantt-dates-header">
-                      <template v-if="viewMode === 'day'">
-                        <div
-                          v-for="(date, idx) in headerDates"
-                          :key="idx"
-                          class="gantt-date-header"
-                          :class="getDayClass(date, idx)"
-                        >
-                          {{ date.getDate() }}
-                        </div>
-                      </template>
-                      <template v-else>
-                        <div
-                          v-for="(week, idx) in displayDates"
-                          :key="idx"
-                          class="gantt-date-header"
-                          :style="{ width: '224px' }"
-                        >
-                          {{ getWeekLabel(week) }}
-                        </div>
-                      </template>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="gantt-body">
-                  <template v-for="mainTask in currentMainTasks" :key="mainTask.id">
-                    <!-- 大分類の行（タイトルのみ、タスクバーなし） -->
-                    <div
-                      class="gantt-row"
-                      :class="{ 'drag-over': dragOverItem === mainTask.id }"
-                      draggable="true"
-                      @dragstart="startDraggingMainTask($event, mainTask)"
-                      @dragover.prevent="onDragOverMainTask($event, mainTask)"
-                      @drop="onDropMainTask($event, mainTask)"
-                      @dragend="draggingMainTask = null; dragOverItem = null"
-                    >
-                      <div class="gantt-cell main-task">
-                        <span>{{ mainTask.title }}</span>
-                        <button @click="openAddSubtaskModal(mainTask.id)" class="gantt-add-btn" title="小分類を追加">+</button>
-                        <button @click="openEditMainTaskModal(mainTask)" class="gantt-edit-btn" title="編集">✏️</button>
-                        <button @click="deleteMainTask(mainTask)" class="gantt-delete-btn" title="削除">🗑️</button>
+                  <!-- 可変列のヘッダー -->
+                  <div class="gantt-header-scroll">
+                    <div class="gantt-header-row">
+                      <!-- 月/週表示行 -->
+                      <div class="gantt-header-dates-row">
+                        <template v-if="viewMode === 'day'">
+                          <div
+                            v-for="(group, idx) in monthGroups"
+                            :key="idx"
+                            class="gantt-month-header"
+                            :style="{ width: (group.count * 32) + 'px' }"
+                          >
+                            {{ group.label }}
+                          </div>
+                        </template>
+                        <template v-else>
+                          <div
+                            v-for="(group, idx) in weekGroups"
+                            :key="idx"
+                            class="gantt-month-header"
+                            :style="{ width: (group.count * 224) + 'px' }"
+                          >
+                            {{ group.label }}
+                          </div>
+                        </template>
                       </div>
-                      <div class="gantt-dates-row">
+                      <!-- 日/週表示行 -->
+                      <div class="gantt-header-dates-row" style="border-top: 1px solid #e2e8f0;">
                         <template v-if="viewMode === 'day'">
                           <div
                             v-for="(date, idx) in headerDates"
                             :key="idx"
-                            class="gantt-date-cell"
+                            class="gantt-date-header"
                             :class="getDayClass(date, idx)"
-                          ></div>
+                          >
+                            {{ date.getDate() }}
+                          </div>
                         </template>
                         <template v-else>
                           <div
                             v-for="(week, idx) in displayDates"
                             :key="idx"
-                            class="gantt-date-cell"
+                            class="gantt-date-header"
                             :style="{ width: '224px' }"
-                          ></div>
+                          >
+                            {{ getWeekLabel(week) }}
+                          </div>
                         </template>
                       </div>
                     </div>
+                  </div>
+                </div>
 
-                    <!-- 小分類の行 -->
-                    <template v-for="subtask in getSubtasksForMainTask(mainTask.id)" :key="subtask.id">
-                      <div
-                        class="gantt-row subtask-row-with-tasks"
-                        :class="{ 'drag-over': dragOverItem === subtask.id }"
-                        :style="{ minHeight: getSubtaskRowHeight(subtask.id) + 'px' }"
-                      >
+                <!-- ボディ部分 -->
+                <div class="gantt-wrapper" ref="ganttWrapper">
+                  <!-- 固定列のボディ -->
+                  <div class="gantt-body-fixed" ref="ganttBodyFixed">
+                    <div class="gantt-rows-container">
+                      <template v-for="mainTask in currentMainTasks" :key="mainTask.id">
+                        <!-- 大分類の行（固定列） -->
                         <div
-                          class="gantt-cell subtask-header"
+                          class="gantt-row"
+                          :class="{ 'drag-over': dragOverItem === mainTask.id }"
                           draggable="true"
-                          @dragstart="startDraggingSubtask($event, subtask)"
-                          @dragover.prevent="onDragOverSubtask($event, subtask)"
-                          @drop="onDropSubtask($event, subtask)"
-                          @dragend="draggingSubtask = null; dragOverItem = null"
+                          @dragstart="startDraggingMainTask($event, mainTask)"
+                          @dragover.prevent="onDragOverMainTask($event, mainTask)"
+                          @drop="onDropMainTask($event, mainTask)"
+                          @dragend="draggingMainTask = null; dragOverItem = null"
                         >
-                          <span>{{ subtask.title }}</span>
-                          <button @click="openAddTaskModalForSubtask(subtask.id)" class="gantt-add-btn" title="タスクを追加">+</button>
-                          <button @click="openEditSubtaskModal(subtask)" class="gantt-edit-btn" title="編集">✏️</button>
-                          <button @click="deleteSubtask(subtask)" class="gantt-delete-btn" title="削除">🗑️</button>
-                        </div>
-                        <div class="gantt-dates-row">
-                          <template v-if="viewMode === 'day'">
-                            <div
-                              v-for="(date, idx) in headerDates"
-                              :key="idx"
-                              class="gantt-date-cell"
-                              :class="getDayClass(date, idx)"
-                              @click="openAddTaskModalWithDate(subtask.id, date)"
-                            ></div>
-                          </template>
-                          <template v-else>
-                            <div
-                              v-for="(week, idx) in displayDates"
-                              :key="idx"
-                              class="gantt-date-cell"
-                              :style="{ width: '224px' }"
-                            ></div>
-                          </template>
-                          <!-- 小分類に属するすべてのタスクバーを表示 -->
-                          <div class="gantt-bars-container-multi">
-                            <div
-                              v-for="(task, taskIdx) in getTasksForSubtask(subtask.id)"
-                              :key="task.id"
-                              class="gantt-bar"
-                              :class="task.status"
-                              :style="getTaskBarStyleWithOffset(task, taskIdx)"
-                              :title="task.title"
-                              @mousedown="startDraggingTask($event, task)"
-                              @click="handleTaskClick(task)"
-                            >
-                              {{ task.title }}
-                              <div
-                                class="gantt-bar-resize-handle"
-                                @mousedown.stop="startResizingTask($event, task)"
-                              ></div>
-                            </div>
+                          <div class="gantt-cell main-task">
+                            <span>{{ mainTask.title }}</span>
+                            <button @click="openAddSubtaskModal(mainTask.id)" class="gantt-add-btn" title="小分類を追加">+</button>
+                            <button @click="openEditMainTaskModal(mainTask)" class="gantt-edit-btn" title="編集">✏️</button>
+                            <button @click="deleteMainTask(mainTask)" class="gantt-delete-btn" title="削除">🗑️</button>
                           </div>
                         </div>
-                      </div>
-                    </template>
-                  </template>
+
+                        <!-- 小分類の行（固定列） -->
+                        <template v-for="subtask in getSubtasksForMainTask(mainTask.id)" :key="subtask.id">
+                          <div
+                            class="gantt-row"
+                            :class="{ 'drag-over': dragOverItem === subtask.id }"
+                            :style="{ minHeight: getSubtaskRowHeight(subtask.id) + 'px' }"
+                          >
+                            <div
+                              class="gantt-cell subtask-header"
+                              draggable="true"
+                              @dragstart="startDraggingSubtask($event, subtask)"
+                              @dragover.prevent="onDragOverSubtask($event, subtask)"
+                              @drop="onDropSubtask($event, subtask)"
+                              @dragend="draggingSubtask = null; dragOverItem = null"
+                            >
+                              <span>{{ subtask.title }}</span>
+                              <button @click="openAddTaskModalForSubtask(subtask.id)" class="gantt-add-btn" title="タスクを追加">+</button>
+                              <button @click="openEditSubtaskModal(subtask)" class="gantt-edit-btn" title="編集">✏️</button>
+                              <button @click="deleteSubtask(subtask)" class="gantt-delete-btn" title="削除">🗑️</button>
+                            </div>
+                          </div>
+                        </template>
+                      </template>
+                    </div>
+                  </div>
+
+                  <!-- 可変列のボディ -->
+                  <div class="gantt-body-scroll" ref="ganttBodyScroll" @scroll="syncScroll">
+                    <div class="gantt-rows-container">
+                      <template v-for="mainTask in currentMainTasks" :key="mainTask.id">
+                        <!-- 大分類の行（可変列） -->
+                        <div class="gantt-row">
+                          <div class="gantt-dates-row">
+                            <template v-if="viewMode === 'day'">
+                              <div
+                                v-for="(date, idx) in headerDates"
+                                :key="idx"
+                                class="gantt-date-cell"
+                                :class="getDayClass(date, idx)"
+                              ></div>
+                            </template>
+                            <template v-else>
+                              <div
+                                v-for="(week, idx) in displayDates"
+                                :key="idx"
+                                class="gantt-date-cell"
+                                :style="{ width: '224px' }"
+                              ></div>
+                            </template>
+                          </div>
+                        </div>
+
+                        <!-- 小分類の行（可変列） -->
+                        <template v-for="subtask in getSubtasksForMainTask(mainTask.id)" :key="subtask.id">
+                          <div
+                            class="gantt-row"
+                            :style="{ minHeight: getSubtaskRowHeight(subtask.id) + 'px' }"
+                          >
+                            <div class="gantt-dates-row">
+                              <template v-if="viewMode === 'day'">
+                                <div
+                                  v-for="(date, idx) in headerDates"
+                                  :key="idx"
+                                  class="gantt-date-cell"
+                                  :class="getDayClass(date, idx)"
+                                  @click="openAddTaskModalWithDate(subtask.id, date)"
+                                ></div>
+                              </template>
+                              <template v-else>
+                                <div
+                                  v-for="(week, idx) in displayDates"
+                                  :key="idx"
+                                  class="gantt-date-cell"
+                                  :style="{ width: '224px' }"
+                                ></div>
+                              </template>
+                              <!-- 小分類に属するすべてのタスクバーを表示 -->
+                              <div class="gantt-bars-container-multi">
+                                <div
+                                  v-for="(task, taskIdx) in getTasksForSubtask(subtask.id)"
+                                  :key="task.id"
+                                  class="gantt-bar"
+                                  :class="task.status"
+                                  :style="getTaskBarStyleWithOffset(task, taskIdx)"
+                                  :title="task.title"
+                                  @mousedown="startDraggingTask($event, task)"
+                                  @click="handleTaskClick(task)"
+                                >
+                                  {{ task.title }}
+                                  <div
+                                    class="gantt-bar-resize-handle"
+                                    @mousedown.stop="startResizingTask($event, task)"
+                                  ></div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </template>
+                      </template>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2165,14 +2232,20 @@
 
             // データロード後にガントチャートを今日の日付にスクロール
             this.$nextTick(() => {
-              if (this.$refs.ganttContainer) {
+              if (this.$refs.ganttBodyScroll) {
                 const scrollLeft = this.todayOffset * 32 - 200; // 今日の位置から少し左にオフセット
-                this.$refs.ganttContainer.scrollLeft = Math.max(0, scrollLeft);
+                this.$refs.ganttBodyScroll.scrollLeft = Math.max(0, scrollLeft);
               }
             });
           } catch (error) {
             console.error('データ読み込みエラー:', error);
             this.isLoading = false;
+          }
+        },
+        syncScroll(event) {
+          // 可変列のボディがスクロールされたら、ヘッダーの可変列も同期
+          if (this.$refs.ganttHeaderScroll) {
+            this.$refs.ganttHeaderScroll.scrollLeft = event.target.scrollLeft;
           }
         },
         getProjectsForClient(clientId) {
@@ -3224,11 +3297,11 @@
 
         // ガントチャートを今日の日付にスクロール
         this.$nextTick(() => {
-          if (this.$refs.ganttContainer) {
+          if (this.$refs.ganttBodyScroll) {
             const todayPosition = this.todayOffset * 32; // 32pxは1日分の幅
-            const containerWidth = this.$refs.ganttContainer.clientWidth;
+            const containerWidth = this.$refs.ganttBodyScroll.clientWidth;
             const scrollPosition = todayPosition - containerWidth / 2 + 16; // 画面中央に表示
-            this.$refs.ganttContainer.scrollLeft = Math.max(0, scrollPosition);
+            this.$refs.ganttBodyScroll.scrollLeft = Math.max(0, scrollPosition);
           }
         });
       },
