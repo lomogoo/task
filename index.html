@@ -411,8 +411,13 @@
       font-weight: 600;
     }
 
-    .gantt-title-btn:hover {
+    .gantt-title-btn:hover:not(:disabled) {
       background-color: #e2e8f0;
+    }
+
+    .gantt-title-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
     .gantt-container {
@@ -1291,8 +1296,8 @@
             <div class="gantt-section-inner">
               <div class="gantt-title-row">
 <h2 class="gantt-title">ガントチャート</h2>
-                <button @click="openAddMainTaskModal(selectedProject)" class="gantt-title-btn" title="大分類を追加">+ 大分類追加</button>
-                <button @click="openAddTaskModal(currentMainTasks[0]?.id)" class="gantt-title-btn" title="タスクを追加">+ タスク追加</button>
+                <button @click="openAddMainTaskModal(selectedProject)" class="gantt-title-btn" title="大分類を追加" :disabled="!selectedProject">+ 大分類追加</button>
+                <button @click="openAddTaskModal(currentMainTasks[0]?.id)" class="gantt-title-btn" title="タスクを追加" :disabled="!currentMainTasks[0]?.id">+ タスク追加</button>
               </div>
               <div class="gantt-container" ref="ganttContainer">
                 <!-- ヘッダー部分 -->
@@ -1998,7 +2003,7 @@
             todos: []
           },
           isLoading: true,
-          selectedProject: 'p1',
+          selectedProject: null,
           selectedTaskForDetail: null,
           editingTask: {},
           editingClient: null,
@@ -2248,6 +2253,12 @@
             }
 
             this.expandedClients[this.data.clients[0]?.id] = true;
+
+            // 最初のプロジェクトを選択（存在する場合）
+            if (this.data.projects.length > 0) {
+              this.selectedProject = this.data.projects[0].id;
+            }
+
             this.newTaskForm.startdate = this.today;
             this.newTaskForm.enddate = this.today;
             this.isLoading = false;
@@ -2657,6 +2668,10 @@
           }
         },
         openAddMainTaskModal(projectId) {
+          if (!projectId) {
+            alert('プロジェクトを選択してください');
+            return;
+          }
           this.showAddMainTaskModal = projectId;
           this.newMainTaskForm.title = '';
         },
