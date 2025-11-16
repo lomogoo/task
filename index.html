@@ -323,6 +323,25 @@
       color: white;
     }
 
+    .view-btn {
+      position: relative;
+    }
+
+    .todo-badge {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      background-color: #ef4444;
+      color: white;
+      border-radius: 12px;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-weight: 700;
+      min-width: 18px;
+      text-align: center;
+      line-height: 1.2;
+    }
+
     .today-display {
       font-size: 14px;
       color: #64748b;
@@ -471,6 +490,10 @@
       background-color: #dbeafe;
       color: #1e40af;
       font-weight: 700;
+    }
+
+    .gantt-date-header.weekday {
+      background-color: #f8fafc;
     }
 
     .gantt-date-header.saturday {
@@ -1201,6 +1224,7 @@
                 :class="{ active: viewMode === 'todo' }"
               >
                 ToDoリスト
+                <span v-if="incompleteTodoCount > 0" class="todo-badge">{{ incompleteTodoCount }}</span>
               </button>
             </div>
             <div class="today-display">本日: {{ today }}</div>
@@ -1988,7 +2012,7 @@
             }
 
             endDate = new Date(latestTask.enddate);
-            endDate.setDate(endDate.getDate() + 7); // 最後のタスクの7日後まで表示
+            endDate.setMonth(endDate.getMonth() + 1); // 最後のタスクの1ヶ月後まで表示
           } else {
             // タスクがない場合は今日の30日前から開始
             startDate = new Date(today);
@@ -2103,6 +2127,9 @@
             const dateB = new Date(b.enddate);
             return dateA - dateB;
           });
+        },
+        incompleteTodoCount() {
+          return this.data.todos.filter(todo => !todo.completed).length;
         }
       },
       methods: {
@@ -2260,9 +2287,20 @@
         getDayClass(date, idx) {
           const classes = [];
           if (idx === this.todayOffset) classes.push('today');
-          if (this.isSaturday(date)) classes.push('saturday');
-          if (this.isSunday(date)) classes.push('sunday');
-          if (this.isHoliday(date)) classes.push('holiday');
+
+          const isSat = this.isSaturday(date);
+          const isSun = this.isSunday(date);
+          const isHol = this.isHoliday(date);
+
+          if (isSat) classes.push('saturday');
+          if (isSun) classes.push('sunday');
+          if (isHol) classes.push('holiday');
+
+          // 平日の場合（土日祝でない場合）
+          if (!isSat && !isSun && !isHol) {
+            classes.push('weekday');
+          }
+
           return classes.join(' ');
         },
         getWeekStart(date) {
