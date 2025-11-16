@@ -470,12 +470,24 @@
     }
 
     .gantt-header-cell {
-      padding: 12px;
       text-align: left;
       font-weight: 600;
       color: #64748b;
       background-color: #f1f5f9;
       border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      padding-left: 12px;
+    }
+
+    .gantt-header-cell:first-child {
+      padding: 6px 12px;
+      min-height: 26px;
+    }
+
+    .gantt-header-cell:last-child {
+      padding: 8px 12px;
+      min-height: 28px;
     }
 
     .gantt-dates-header {
@@ -497,6 +509,11 @@
       padding: 6px 4px;
       font-weight: 600;
       background-color: #f8fafc;
+      min-height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
     }
 
     .gantt-day-row {
@@ -511,6 +528,11 @@
       color: #64748b;
       padding: 8px 4px;
       flex-shrink: 0;
+      min-height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
     }
 
     .gantt-date-header.today {
@@ -2653,18 +2675,24 @@
               order: maxOrder + 1
             };
 
-            const { error } = await supabase
+            const { data, error } = await supabase
               .from('maintasks')
-              .insert([newMainTask]);
+              .insert([newMainTask])
+              .select();
 
-            if (error) throw error;
+            if (error) {
+              console.error('Supabaseエラー詳細:', error);
+              throw error;
+            }
 
             this.data.maintasks.push(newMainTask);
             this.showAddMainTaskModal = null;
             this.newMainTaskForm = { title: '' };
           } catch (error) {
             console.error('追加エラー:', error);
-            alert('大分類の追加に失敗しました');
+            console.error('エラーメッセージ:', error.message);
+            console.error('エラーコード:', error.code);
+            alert('大分類の追加に失敗しました: ' + (error.message || '不明なエラー'));
           }
         },
         openEditMainTaskModal(mainTask) {
