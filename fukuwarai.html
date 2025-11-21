@@ -3,205 +3,305 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>福笑いメッシュアニメーター (PixiJS版)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>リアル・マニュアル福笑い V4</title>
     <script src="https://pixijs.download/v7.3.2/pixi.min.js"></script>
     <style>
         body {
             font-family: "Helvetica Neue", Arial, sans-serif;
             text-align: center;
-            background-color: #333;
-            /* 画面が見やすいように暗く */
-            color: white;
+            background-color: #222;
+            color: #eee;
             margin: 0;
-            padding: 20px;
+            padding: 10px;
+            height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
             overflow: hidden;
-            /* スクロール防止 */
         }
 
         h1 {
             margin: 0 0 10px 0;
-            font-size: 1.5rem;
+            font-size: 1.2rem;
         }
 
-        #ui-container {
+        #ui-header {
+            flex: 0 0 auto;
             margin-bottom: 10px;
         }
 
-        /* キャンバスを重ねて表示するためのラッパー */
+        #control-panel {
+            display: none;
+            margin-bottom: 8px;
+            padding: 5px;
+            background: #444;
+            border-radius: 5px;
+        }
+
+        #canvas-container-flex {
+            flex: 1 1 auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            width: 100%;
+            overflow: hidden;
+        }
+
         #canvas-wrapper {
             position: relative;
-            display: inline-block;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-            border: 2px solid #555;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+            border: 1px solid #555;
             background-color: #000;
         }
 
-        /* PixiJSが描画するキャンバス */
         #pixi-canvas {
             display: block;
         }
 
-        /* ユーザーが線を描くための透明キャンバス（UI用） */
         #draw-canvas {
             position: absolute;
             top: 0;
             left: 0;
             cursor: crosshair;
             touch-action: none;
-            /* スマホでのスクロール防止 */
         }
 
+        /* ボタンのデザイン */
         button {
             padding: 8px 16px;
+            margin: 4px;
             font-size: 14px;
             cursor: pointer;
-            background-color: #007bff;
+            background-color: #555;
             color: white;
-            border: none;
+            border: 1px solid #777;
             border-radius: 4px;
+            transition: background 0.2s;
         }
 
-        .active-type {
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            border-color: #007bff;
+        }
+
+        .btn-danger {
+            background-color: #d9534f;
+            border-color: #d9534f;
+        }
+
+        .btn-success {
             background-color: #28a745;
-            /* 選択中のボタン色 */
-            box-shadow: 0 0 5px white;
+            border-color: #28a745;
+        }
+
+        /* 選択中のボタンを光らせる */
+        .mode-active {
+            box-shadow: 0 0 8px white;
+            border: 2px solid white;
+            font-weight: bold;
         }
 
         #instructions {
             font-size: 0.9rem;
             color: #ccc;
             margin-top: 5px;
+            min-height: 1.2em;
         }
     </style>
 </head>
 
 <body>
 
-    <h1>福笑いメッシュアニメーター</h1>
+    <h1>リアル・マニュアル福笑い V4</h1>
 
-    <div id="ui-container">
+    <div id="ui-header">
         <input type="file" id="fileInput" accept="image/*">
-        <button id="resetBtn" onclick="location.reload()" style="display:none;">リセット</button>
+        <button id="resetBtn" onclick="location.reload()" style="display:none;">最初から</button>
 
-        <div id="tool-panel" style="display:none; margin-top:10px;">
-            <span>動きの種類: </span>
-            <button onclick="setAnimType('blink')" id="btn-blink" class="active-type">まばたき（目）</button>
-            <button onclick="setAnimType('talk')" id="btn-talk">パクパク（口）</button>
-            <button onclick="setAnimType('breathe')" id="btn-breathe">ふわふわ（鼻/眉）</button>
+        <div id="control-panel">
+            <div style="margin-bottom:5px;">
+                <span style="font-size:0.8rem; color:#aaa;">STEP 1: </span>
+                <button id="btn-outline" onclick="setMode('outline')" class="btn-primary">🔵 輪郭カット</button>
+            </div>
+            <div>
+                <span style="font-size:0.8rem; color:#aaa;">STEP 2: </span>
+                <button id="btn-eye" onclick="setMode('eye')" class="btn-success" disabled>👁️ 目を追加</button>
+                <button id="btn-mouth" onclick="setMode('mouth')" class="btn-danger" disabled>👄 口を追加</button>
+            </div>
         </div>
         <div id="instructions">画像をアップロードしてください</div>
     </div>
 
-    <div id="canvas-wrapper">
+    <div id="canvas-container-flex">
+        <div id="canvas-wrapper"></div>
     </div>
 
     <script>
-        // --- 変数定義 ---
-        let app; // PixiJS Application
-        let baseTexture; // 元画像のテクスチャ
-        let imgSprite; // 背景として表示する画像
-
-        const drawCanvas = document.createElement('canvas'); // 線を描く用
+        // ==========================================
+        //  変数定義
+        // ==========================================
+        let app, baseTexture, imgSprite, faceMaskGraphics;
+        const drawCanvas = document.createElement('canvas');
         drawCanvas.id = 'draw-canvas';
         const drawCtx = drawCanvas.getContext('2d');
 
         let isDrawing = false;
-        let points = []; // 描画した線の座標リスト
-        let currentAnimType = 'blink'; // 現在選択中のアニメーションタイプ
+        let points = [];
 
-        // アニメーションさせるメッシュのリスト
+        // モード: 'outline' | 'eye' | 'mouth'
+        let currentMode = 'outline';
+
         const animatedMeshes = [];
+        let globalTime = 0;
 
-        // --- 初期化処理 ---
         const wrapper = document.getElementById('canvas-wrapper');
         const fileInput = document.getElementById('fileInput');
         const instructions = document.getElementById('instructions');
-        const toolPanel = document.getElementById('tool-panel');
+        const controlPanel = document.getElementById('control-panel');
 
+        // ボタン参照
+        const btnOutline = document.getElementById('btn-outline');
+        const btnEye = document.getElementById('btn-eye');
+        const btnMouth = document.getElementById('btn-mouth');
+
+        // ==========================================
+        //  初期化処理
+        // ==========================================
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
+
+            fileInput.style.display = 'none';
+            document.getElementById('resetBtn').style.display = 'inline-block';
+            controlPanel.style.display = 'block';
+
             const reader = new FileReader();
-            reader.onload = (event) => {
-                initPixi(event.target.result);
-            }
+            reader.onload = (event) => initPixi(event.target.result);
             reader.readAsDataURL(file);
         });
 
-        // PixiJSの起動
         function initPixi(imageUrl) {
-            // UI切り替え
-            fileInput.style.display = 'none';
-            document.getElementById('resetBtn').style.display = 'inline-block';
-            toolPanel.style.display = 'block';
-            instructions.textContent = "動かしたい部分をマウスで囲ってください（始点と終点が繋がります）";
-
-            // 画像サイズを取得するために一時的にImageオブジェクト作成
             const img = new Image();
             img.onload = () => {
-                // 画面サイズに合わせて縮小
-                const maxWidth = 800;
-                const scale = img.width > maxWidth ? maxWidth / img.width : 1;
-                const w = img.width * scale;
-                const h = img.height * scale;
+                // 画面フィット計算
+                const headerHeight = document.getElementById('ui-header').offsetHeight;
+                const availableW = window.innerWidth - 20;
+                const availableH = window.innerHeight - headerHeight - 30;
+                const scale = Math.min(availableW / img.width, availableH / img.height);
+                const w = Math.floor(img.width * scale);
+                const h = Math.floor(img.height * scale);
 
-                // PixiJSアプリ作成
                 app = new PIXI.Application({
-                    width: w,
-                    height: h,
-                    backgroundColor: 0x333333,
-                    antialias: true
+                    width: w, height: h, backgroundColor: 0x000000, antialias: true
                 });
                 app.view.id = 'pixi-canvas';
                 wrapper.appendChild(app.view);
 
-                // 手書き用Canvasの設定
-                drawCanvas.width = w;
-                drawCanvas.height = h;
-                wrapper.appendChild(drawCanvas); // Pixiの上に重ねる
+                drawCanvas.width = w; drawCanvas.height = h;
+                wrapper.appendChild(drawCanvas);
                 setupDrawingEvents();
 
-                // 画像をPixiにロード
                 PIXI.Assets.load(imageUrl).then((texture) => {
                     baseTexture = texture;
-
-                    // 背景画像の配置
                     imgSprite = new PIXI.Sprite(texture);
-                    imgSprite.width = w;
-                    imgSprite.height = h;
+                    imgSprite.width = w; imgSprite.height = h;
                     app.stage.addChild(imgSprite);
 
-                    // アニメーションループ開始
+                    faceMaskGraphics = new PIXI.Graphics();
+                    app.stage.addChild(faceMaskGraphics);
+
+                    // アニメーションループ
                     app.ticker.add((delta) => {
-                        updateAnimation(delta);
+                        globalTime += delta / 60;
+                        updateRealAnimation(globalTime);
                     });
+
+                    setMode('outline'); // 最初は輪郭モード
                 });
             };
             img.src = imageUrl;
         }
 
-        // --- 描画イベント（投げ縄選択） ---
-        function setupDrawingEvents() {
-            drawCanvas.addEventListener('mousedown', startDraw);
-            drawCanvas.addEventListener('mousemove', moveDraw);
-            drawCanvas.addEventListener('mouseup', endDraw);
+        // ==========================================
+        //  モード管理
+        // ==========================================
+        function setMode(mode) {
+            currentMode = mode;
 
-            // タッチ対応
-            drawCanvas.addEventListener('touchstart', (e) => {
-                e.preventDefault(); // スクロール防止
-                const t = e.touches[0];
-                startDraw({ clientX: t.clientX, clientY: t.clientY });
-            });
-            drawCanvas.addEventListener('touchmove', (e) => {
-                e.preventDefault();
-                const t = e.touches[0];
-                moveDraw({ clientX: t.clientX, clientY: t.clientY });
-            });
-            drawCanvas.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                endDraw();
-            });
+            // ボタンの見た目リセット
+            [btnOutline, btnEye, btnMouth].forEach(b => b.classList.remove('mode-active'));
+
+            if (mode === 'outline') {
+                btnOutline.classList.add('mode-active');
+                instructions.textContent = "顔の輪郭をぐるっと囲んで切り抜いてください";
+                drawCtx.strokeStyle = '#007bff'; // 青
+            } else if (mode === 'eye') {
+                btnEye.classList.add('mode-active');
+                instructions.textContent = "目を囲んでください（リアルな瞬きがつきます）";
+                drawCtx.strokeStyle = '#28a745'; // 緑
+            } else if (mode === 'mouth') {
+                btnMouth.classList.add('mode-active');
+                instructions.textContent = "口を囲んでください（舌と口内が生成されます）";
+                drawCtx.strokeStyle = '#d9534f'; // 赤
+            }
+        }
+
+        function enablePartButtons() {
+            btnEye.disabled = false;
+            btnMouth.disabled = false;
+            btnOutline.disabled = true; // 輪郭は1回だけ
+            btnOutline.style.opacity = 0.5;
+        }
+
+        // ==========================================
+        //  描画（なぞり）イベント
+        // ==========================================
+        function setupDrawingEvents() {
+            const start = (e) => {
+                isDrawing = true; points = [];
+                points.push(getPos(e));
+                drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+                drawCtx.beginPath();
+                drawCtx.moveTo(points[0].x, points[0].y);
+            };
+            const move = (e) => {
+                if (!isDrawing) return;
+                const p = getPos(e);
+                points.push(p);
+                drawCtx.lineTo(p.x, p.y);
+                drawCtx.lineWidth = 3;
+                drawCtx.stroke();
+            };
+            const end = (e) => {
+                if (!isDrawing) return;
+                isDrawing = false;
+                drawCtx.closePath(); drawCtx.stroke();
+                drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+
+                if (points.length < 10) return; // 短すぎる線は無視
+
+                if (currentMode === 'outline') {
+                    createOutlineMask(points);
+                    enablePartButtons();
+                    setMode('eye'); // 自動的に目モードへ
+                } else {
+                    // 目か口を作る
+                    createRealMeshFromSelection(points, currentMode);
+                }
+            };
+
+            drawCanvas.addEventListener('mousedown', start);
+            drawCanvas.addEventListener('mousemove', move);
+            drawCanvas.addEventListener('mouseup', end);
+            drawCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); start(e.touches[0]); });
+            drawCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); move(e.touches[0]); });
+            drawCanvas.addEventListener('touchend', (e) => { e.preventDefault(); end(); });
         }
 
         function getPos(e) {
@@ -209,202 +309,153 @@
             return { x: e.clientX - rect.left, y: e.clientY - rect.top };
         }
 
-        function startDraw(e) {
-            isDrawing = true;
-            points = [];
-            points.push(getPos(e));
-            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-            drawCtx.beginPath();
-            drawCtx.moveTo(points[0].x, points[0].y);
-        }
-
-        function moveDraw(e) {
-            if (!isDrawing) return;
-            const p = getPos(e);
-            points.push(p);
-            drawCtx.lineTo(p.x, p.y);
-            drawCtx.strokeStyle = 'cyan';
-            drawCtx.lineWidth = 3;
-            drawCtx.stroke();
-        }
-
-        function endDraw() {
-            if (!isDrawing) return;
-            isDrawing = false;
-            drawCtx.closePath(); // 線を閉じる
-            drawCtx.stroke();
-
-            // 短すぎる線は無視
-            if (points.length < 10) {
-                drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-                return;
+        // ==========================================
+        //  実処理（マスク・メッシュ生成）
+        // ==========================================
+        function createOutlineMask(pointList) {
+            faceMaskGraphics.clear();
+            faceMaskGraphics.beginFill(0xFFFFFF);
+            if (pointList.length > 0) {
+                faceMaskGraphics.moveTo(pointList[0].x, pointList[0].y);
+                for (let i = 1; i < pointList.length; i++) {
+                    faceMaskGraphics.lineTo(pointList[i].x, pointList[i].y);
+                }
             }
-
-            // 囲った範囲からメッシュを生成
-            createMeshFromSelection(points);
-
-            // 線を消す
-            setTimeout(() => {
-                drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-            }, 500);
+            faceMaskGraphics.closePath();
+            faceMaskGraphics.endFill();
+            imgSprite.mask = faceMaskGraphics;
         }
 
-        // --- メッシュ生成の核心部分 ---
-        function createMeshFromSelection(pointList) {
-            // 1. 囲まれた範囲のバウンディングボックス（四角枠）を計算
+        function createRealMeshFromSelection(pointList, type) {
+            // 囲まれた範囲の矩形(バウンディングボックス)を計算
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             pointList.forEach(p => {
-                if (p.x < minX) minX = p.x;
-                if (p.y < minY) minY = p.y;
-                if (p.x > maxX) maxX = p.x;
-                if (p.y > maxY) maxY = p.y;
+                if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y;
+                if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y;
             });
 
-            // マージンを追加（動きの余白のため）
-            const margin = 10;
-            minX = Math.max(0, minX - margin);
-            minY = Math.max(0, minY - margin);
-            maxX = Math.min(app.screen.width, maxX + margin);
-            maxY = Math.min(app.screen.height, maxY + margin);
+            // 少しマージンをとる
+            const margin = 15;
+            minX = Math.max(0, minX - margin); minY = Math.max(0, minY - margin);
+            maxX = Math.min(app.screen.width, maxX + margin); maxY = Math.min(app.screen.height, maxY + margin);
+            const width = maxX - minX; const height = maxY - minY;
 
-            const width = maxX - minX;
-            const height = maxY - minY;
-
-            // 2. メッシュ（SimplePlane）を作成
-            // グリッドの細かさ。細かいほど滑らかに動く (10x10分割)
-            const segX = 10;
-            const segY = 10;
-
-            // 元画像からこの範囲だけのテクスチャを切り出す設定
-            // 注意: 実際にCanvasを切るのではなく、参照範囲を指定するだけ
-            // 画像の元の大きさと、現在の表示サイズの比率を計算
+            // Pixi用の設定
+            const segX = 12; const segY = 12;
             const scaleX = baseTexture.width / app.screen.width;
             const scaleY = baseTexture.height / app.screen.height;
 
+            // 元画像からテクスチャ切り出し
             const frame = new PIXI.Rectangle(minX * scaleX, minY * scaleY, width * scaleX, height * scaleY);
             const cropTexture = new PIXI.Texture(baseTexture.baseTexture, frame);
 
-            // メッシュ作成
+            // メッシュ生成
             const plane = new PIXI.SimplePlane(cropTexture, segX, segY);
-            plane.x = minX;
-            plane.y = minY;
-            plane.width = width;
-            plane.height = height;
+            plane.x = minX; plane.y = minY; plane.width = width; plane.height = height;
 
-            // 3. 頂点ごとの「動きやすさ（ウェイト）」を計算
-            // 中心に近い頂点はよく動き、端の頂点は動かない（固定）ようにする
-            // これにより背景とシームレスに繋がる
+            // ウェイト計算
             const weights = [];
             const buffer = plane.geometry.getBuffer('aVertexPosition');
-
             for (let i = 0; i < buffer.data.length; i += 2) {
-                // 0.0〜1.0の正規化座標（メッシュ内での相対位置）
-                // SimplePlaneの頂点は左上から右下へ並んでいる前提
-                const col = (i / 2) % segX;
-                const row = Math.floor((i / 2) / segX);
-
-                // 中心からの距離を計算 (0.0:中心, 1.0:端)
-                // 簡易的に、端に行くほどウェイトを0にするSin波を使う
-                // x方向の重み: 端は0, 中心は1
-                // y方向の重み: 端は0, 中心は1
-                // 厳密な円形判定ではないが、プロトタイプとしては十分
-
-                // 頂点の相対位置 (0~1)
                 const nx = (buffer.data[i] / width);
                 const ny = (buffer.data[i + 1] / height);
-
-                // 端っこに近いほど動かないようにする数学関数（放物線のようなもの）
-                // 4 * x * (1-x) は x=0.5で1、x=0,1で0になる
                 const wx = Math.sin(nx * Math.PI);
                 const wy = Math.sin(ny * Math.PI);
-
-                // 最終的なウェイト (端は0になるので背景とズレない！)
-                weights.push(wx * wy);
+                weights.push(Math.pow(wx * wy, 2));
             }
 
-            // メッシュ情報を保存
-            animatedMeshes.push({
-                mesh: plane,
-                baseBuffer: Float32Array.from(buffer.data), // 初期の頂点位置を記憶
-                weights: weights,
-                type: currentAnimType,
-                timeOffset: Math.random() * 10 // 動きのタイミングをバラけさせる
-            });
+            const animData = {
+                mesh: plane, baseBuffer: Float32Array.from(buffer.data),
+                weights: weights, type: type,
+                timeOffset: Math.random() * 10
+            };
+            animatedMeshes.push(animData);
 
-            app.stage.addChild(plane);
+            // --- 口なら舌を追加（V3のロジックを移植） ---
+            if (type === 'mouth') {
+                const mouthContainer = new PIXI.Container();
+                mouthContainer.x = plane.x; mouthContainer.y = plane.y;
+
+                // 口内（暗闇）
+                const innerMouth = new PIXI.Graphics();
+                innerMouth.beginFill(0x330000);
+                innerMouth.drawEllipse(plane.width / 2, plane.height / 2 + plane.height * 0.1, plane.width * 0.4, plane.height * 0.3);
+                innerMouth.endFill();
+                mouthContainer.addChild(innerMouth);
+
+                // 舌
+                const tongue = new PIXI.Graphics();
+                tongue.beginFill(0xE9967A);
+                tongue.drawEllipse(plane.width / 2, plane.height / 2 + plane.height * 0.3, plane.width * 0.25, plane.height * 0.2);
+                tongue.endFill();
+                animData.tongueSprite = tongue;
+                mouthContainer.addChild(tongue);
+
+                // メッシュを手前に
+                plane.x = 0; plane.y = 0;
+                mouthContainer.addChild(plane);
+
+                // マスク設定
+                innerMouth.mask = plane;
+                tongue.mask = plane;
+                app.stage.addChild(mouthContainer);
+
+            } else {
+                app.stage.addChild(plane);
+            }
         }
 
-        // --- アニメーション更新ループ ---
-        function updateAnimation(delta) {
-            // 時間の経過 (ミリ秒 / 1000)
-            const time = app.ticker.lastTime / 1000;
-
+        // ==========================================
+        //  リアル・アニメーション更新 (V3のロジック)
+        // ==========================================
+        function updateRealAnimation(t) {
             animatedMeshes.forEach(item => {
-                const { mesh, baseBuffer, weights, type, timeOffset } = item;
+                const { mesh, baseBuffer, weights, type, timeOffset, tongueSprite } = item;
                 const buffer = mesh.geometry.getBuffer('aVertexPosition');
-                const t = time + timeOffset;
+                const localT = t + timeOffset;
 
-                // アニメーションの種類に応じた動きの計算
-                let moveX = 0;
-                let moveY = 0;
-                let scaleY = 1;
-                let scaleX = 1;
+                let eyeShut = 0; let mouthOpen = 0;
 
-                if (type === 'blink') {
-                    // 瞬き: 周期的にY軸方向に縮む
-                    // sin波で 0.2 ~ 1.0 の間を行き来させる
-                    const cycle = Math.sin(t * 5);
-                    // 閉じる(縮む)のは一瞬だけにするための計算
-                    scaleY = cycle > 0.8 ? 1 - (cycle - 0.8) * 4 : 1;
-                    // 上瞼と下瞼がくっつくイメージ
-                } else if (type === 'talk') {
-                    // パクパク: 縦に伸び縮み
-                    scaleY = 1 + Math.sin(t * 8) * 0.2;
-                } else if (type === 'breathe') {
-                    // ふわふわ: 全体が少し拡大縮小
-                    scaleX = 1 + Math.sin(t * 2) * 0.05;
-                    scaleY = 1 + Math.sin(t * 2) * 0.05;
+                if (type === 'eye') {
+                    const period = 4.0;
+                    const cycle = localT % period;
+                    if (cycle < 0.1) eyeShut = cycle / 0.1;
+                    else if (cycle < 0.25) eyeShut = 1.0 - (cycle - 0.1) / 0.15;
+                    eyeShut = Math.pow(eyeShut, 0.5);
+                } else if (type === 'mouth') {
+                    mouthOpen = (Math.sin(localT * 8) * 0.5 + Math.sin(localT * 3) * 0.3 + 0.2);
+                    mouthOpen = Math.max(0, mouthOpen);
+
+                    if (tongueSprite) {
+                        tongueSprite.y = mesh.height * 0.1 - mouthOpen * mesh.height * 0.1;
+                        tongueSprite.scale.x = 1 + Math.sin(localT * 20) * 0.05 * mouthOpen;
+                    }
                 }
 
-                // 全頂点を更新
                 for (let i = 0; i < buffer.data.length; i += 2) {
-                    const originalX = baseBuffer[i];
-                    const originalY = baseBuffer[i + 1];
-                    const weight = weights[i / 2]; // この頂点の重み(0~1)
+                    const ox = baseBuffer[i]; const oy = baseBuffer[i + 1];
+                    const nx = ox / mesh.width; const ny = oy / mesh.height;
+                    const weight = weights[i / 2];
+                    let dx = 0; let dy = 0;
 
-                    // メッシュの中心座標
-                    const centerX = mesh.width / 2;
-                    const centerY = mesh.height / 2;
+                    if (type === 'eye') {
+                        if (ny < 0.5) dy = (0.6 - ny) * mesh.height * 0.8 * eyeShut;
+                        else dy = -(ny - 0.5) * mesh.height * 0.1 * eyeShut;
+                    } else if (type === 'mouth') {
+                        if (ny > 0.3) {
+                            const jawDrop = (ny - 0.3);
+                            dy = jawDrop * mesh.height * 0.5 * mouthOpen;
+                            dx = -(nx - 0.5) * mesh.width * 0.3 * mouthOpen;
+                        }
+                    }
 
-                    // 中心からの差分
-                    const dx = originalX - centerX;
-                    const dy = originalY - centerY;
-
-                    // 変形を適用
-                    // 重みが1に近い(中心)ほど強く変形、0(端)は変形しない
-                    // これにより「端は固定されたまま、中だけ動く」ゴムのような表現になる
-
-                    const targetX = centerX + dx * scaleX;
-                    const targetY = centerY + dy * scaleY;
-
-                    // 現在位置 = 元の位置 + (目標位置 - 元の位置) * 重み
-                    buffer.data[i] = originalX + (targetX - originalX) * weight;
-                    buffer.data[i + 1] = originalY + (targetY - originalY) * weight;
+                    const appliedWeight = Math.pow(weight, 0.7);
+                    buffer.data[i] = ox + dx * appliedWeight;
+                    buffer.data[i + 1] = oy + dy * appliedWeight;
                 }
-
-                mesh.geometry.getBuffer('aVertexPosition').update();
+                buffer.update();
             });
         }
-
-        // ツールボタン切り替え
-        function setAnimType(type) {
-            currentAnimType = type;
-            document.querySelectorAll('#tool-panel button').forEach(btn => {
-                btn.classList.remove('active-type');
-            });
-            document.getElementById('btn-' + type).classList.add('active-type');
-        }
-
     </script>
 </body>
 

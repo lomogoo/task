@@ -12,7 +12,7 @@ dayjs.locale('ja');
 dayjs.extend(window.dayjs_plugin_relativeTime);
 dayjs.extend(window.dayjs_plugin_isBetween);
 
-const CELL_WIDTH = 40; // 1日の幅(px)
+
 let store = {
   clients: [],
   projects: [],
@@ -102,6 +102,22 @@ async function updateTask(id, updates) {
   if (error) throw error;
 }
 
+async function updateMajorCat(id, name, sortOrder) {
+  const updates = {};
+  if (name) updates.name = name;
+  if (sortOrder !== undefined) updates.sort_order = sortOrder;
+  const { error } = await supabaseClient.from('major_cats').update(updates).eq('id', id);
+  if (error) throw error;
+}
+
+async function updateMinorCat(id, name, sortOrder) {
+  const updates = {};
+  if (name) updates.name = name;
+  if (sortOrder !== undefined) updates.sort_order = sortOrder;
+  const { error } = await supabaseClient.from('minor_cats').update(updates).eq('id', id);
+  if (error) throw error;
+}
+
 async function updateProjectInfo(id, overview, stakeholders) {
   const { error } = await supabaseClient.from('projects')
     .update({ overview, stakeholders }).eq('id', id);
@@ -132,10 +148,29 @@ window.onload = async () => {
   renderClientSelect();
   setupEventListeners();
 
+  // URL共有機能削除
+
+
+
   // 初期履歴の設定
   history.replaceState({ view: 'home' }, '', '#home');
   showHome(false); // 履歴追加なしで表示
+
+  updateChatbotVisibility();
 };
+
+window.addEventListener('hashchange', updateChatbotVisibility);
+
+function updateChatbotVisibility() {
+  const btn = document.getElementById('chatbot-trigger');
+  if (!btn) return;
+  // ホーム画面のみ表示
+  if (location.hash === '#home' || location.hash === '') {
+    btn.style.display = 'flex';
+  } else {
+    btn.style.display = 'none';
+  }
+}
 
 // ブラウザの戻る/進むボタンのハンドリング
 window.addEventListener('popstate', (event) => {
@@ -387,8 +422,7 @@ async function fetchNews() {
         : `<div class="w-16 h-16 rounded-md mr-3 flex-shrink-0 bg-indigo-50 flex items-center justify-center text-indigo-200"><i class="fas fa-newspaper"></i></div>`;
 
       html += `
-        <li class="flex items-start group cursor-pointer hover:bg-gray-50 p-1 rounded transition-colors" onclick="window.open('${item.link}', '_blank')">
-          ${imgHtml}
+        <li class="flex items-start group cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors border-b border-gray-100 last:border-0" onclick="window.open('${item.link}', '_blank')">
           <div class="flex-1 min-w-0">
             <a class="text-sm text-gray-700 group-hover:text-indigo-600 font-medium line-clamp-2 transition-colors leading-snug">${item.title}</a>
             <span class="text-[10px] text-gray-400 block mt-1">${dayjs(item.pubDate).fromNow()}</span>
@@ -413,6 +447,22 @@ async function fetchNews() {
   }
 }
 
+// マウスエフェクト
+document.addEventListener('mousemove', (e) => {
+  // Global glow
+  document.body.style.setProperty('--mouse-x', `${e.clientX}px`);
+  document.body.style.setProperty('--mouse-y', `${e.clientY}px`);
+
+  // Element specific glow
+  document.querySelectorAll('.mouse-glow').forEach(el => {
+    const rect = el.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    el.style.setProperty('--x', `${x}px`);
+    el.style.setProperty('--y', `${y}px`);
+  });
+});
+
 function openLocalNewsModal() {
   const modal = document.getElementById('localNewsModal');
   modal.classList.remove('hidden');
@@ -425,7 +475,6 @@ async function fetchLocalNews() {
   container.innerHTML = '<div class="text-center py-8"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div></div>';
 
   try {
-    // Google News RSS (Japan) - 全国ニュースを表示（検索機能は無料プランでは制限があるため）
     const rssUrl = encodeURIComponent('https://news.google.com/rss?hl=ja&gl=JP&ceid=JP:ja');
     const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${rssUrl}`);
     const data = await res.json();
@@ -434,17 +483,8 @@ async function fetchLocalNews() {
 
     let html = '<ul class="space-y-4">';
     data.items.slice(0, 15).forEach(item => {
-      const img = item.thumbnail || item.enclosure?.link || '';
-      const descImgMatch = item.description.match(/<img[^>]+src="([^">]+)"/);
-      const finalImg = img || (descImgMatch ? descImgMatch[1] : null);
-
-      const imgHtml = finalImg
-        ? `<img src="${finalImg}" class="w-20 h-20 object-cover rounded-md mr-4 flex-shrink-0 bg-gray-200" onerror="this.style.display='none'">`
-        : `<div class="w-20 h-20 rounded-md mr-4 flex-shrink-0 bg-indigo-50 flex items-center justify-center text-indigo-200"><i class="fas fa-newspaper fa-2x"></i></div>`;
-
       html += `
-        <li class="flex items-start group cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors border-b border-gray-100 last:border-0" onclick="window.open('${item.link}', '_blank')">
-          ${imgHtml}
+        <li class="flex items-start group cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors border-b border-gray-100 last:border-0 mouse-glow" onclick="window.open('${item.link}', '_blank')">
           <div class="flex-1">
             <h4 class="text-sm font-bold text-gray-800 group-hover:text-indigo-600 mb-1 leading-snug">${item.title}</h4>
             <p class="text-xs text-gray-500 line-clamp-2 mb-1">${item.description.replace(/<[^>]+>/g, '').substring(0, 100)}...</p>
@@ -467,21 +507,31 @@ function renderUpcomingTasks() {
   const countEl = document.getElementById('upcomingCount');
   if (!list) return;
 
-  // スクロール設定
-  list.classList.add('max-h-80', 'overflow-y-auto', 'scrollbar-hide'); // scrollbar-hideはTailwindプラグインがないと効かないかもだが、overflow-y-autoでスクロールはする
+  list.classList.add('max-h-80', 'overflow-y-auto', 'scrollbar-hide');
 
   const today = dayjs();
-  const nextWeek = today.add(7, 'day');
 
-  const tasks = store.tasks.filter(t => {
+  // タスクの重複排除とフィルタリング
+  const uniqueTasksMap = new Map();
+  store.tasks.forEach(t => {
     const end = dayjs(t.end_date);
-    return t.status !== 2 && end.isAfter(today.subtract(1, 'day')) && end.isBefore(nextWeek);
-  }).sort((a, b) => dayjs(a.end_date).diff(dayjs(b.end_date)));
+    // 完了しておらず、終了日が今日以降のもの
+    if (t.status !== 2 && end.isAfter(today.subtract(1, 'day'))) {
+      // 重複チェックキー: 名前と終了日で判定し、誤登録による重複も排除する
+      const key = `${t.name}|${t.end_date}`;
+
+      if (!uniqueTasksMap.has(key)) {
+        uniqueTasksMap.set(key, t);
+      }
+    }
+  });
+
+  const tasks = Array.from(uniqueTasksMap.values()).sort((a, b) => dayjs(a.end_date).diff(dayjs(b.end_date)));
 
   if (countEl) countEl.textContent = `${tasks.length} tasks`;
 
   if (tasks.length === 0) {
-    list.innerHTML = `<div class="text-center py-8 text-gray-400"><p>No upcoming tasks for 7 days</p></div>`;
+    list.innerHTML = `<div class="text-center py-8 text-gray-400"><p>No upcoming tasks</p></div>`;
     return;
   }
 
@@ -494,13 +544,13 @@ function renderUpcomingTasks() {
 
     const daysLeft = dayjs(t.end_date).diff(today, 'day');
     let timeClass = 'text-gray-500';
-    let timeText = `${daysLeft} days left`;
     if (daysLeft < 0) { timeClass = 'text-red-500 font-bold'; timeText = 'Overdue'; }
     else if (daysLeft === 0) { timeClass = 'text-orange-500 font-bold'; timeText = 'Today'; }
     else if (daysLeft === 1) { timeClass = 'text-indigo-500'; timeText = 'Tomorrow'; }
+    let timeText = `${daysLeft} days left`;
 
     html += `
-      <div class="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-indigo-50 transition-colors group cursor-pointer border-b border-gray-100 last:border-0" onclick="loadProject('${project?.id}')">
+      <div class="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-indigo-50 transition-colors group cursor-pointer border-b border-gray-100 last:border-0 mouse-glow" onclick="loadProject('${project?.id}')">
         <div class="w-2 h-2 rounded-full ${t.status === 0 ? 'bg-gray-300' : 'bg-blue-500'} mr-3 flex-shrink-0"></div>
         <div class="flex-1 min-w-0">
           <h4 class="text-sm font-bold text-gray-800 truncate">${t.name}</h4>
@@ -515,8 +565,8 @@ function renderUpcomingTasks() {
           <div>${timeText}</div>
           <div class="text-[10px] text-gray-300 font-normal">${dayjs(t.end_date).format('MM/DD')}</div>
         </div>
-      </div >
-      `;
+      </div>
+    `;
   });
 
   list.innerHTML = html;
@@ -526,7 +576,6 @@ function renderClientProjectList() {
   const container = document.getElementById('clientProjectList');
   if (!container) return;
 
-  // データがない場合
   if (store.clients.length === 0 && store.projects.length === 0) {
     document.getElementById('emptyState').classList.remove('hidden');
     document.getElementById('emptyState').classList.add('flex');
@@ -541,10 +590,10 @@ function renderClientProjectList() {
 
   store.clients.forEach((client, index) => {
     const clientProjects = store.projects.filter(p => p.client_id === client.id);
-    const delay = index * 100; // アニメーション遅延
+    const delay = index * 100;
 
     html += `
-      <div class="glass rounded-2xl shadow-sm overflow-hidden hover-card group animate-fade-in" style="animation-delay: ${delay}ms">
+      <div class="glass rounded-2xl shadow-sm overflow-hidden hover-card group animate-fade-in mouse-glow" style="animation-delay: ${delay}ms">
         <div class="p-5 border-b border-gray-100/50 bg-gradient-to-r from-gray-50/50 to-white/50 flex justify-between items-center">
           <h3 class="font-bold text-gray-800 truncate flex items-center text-lg cursor-pointer hover:text-indigo-600 transition-colors" onclick="openClientEditModal('${client.id}')" title="クリックして編集">
             <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center mr-3 shadow-sm">
@@ -562,7 +611,6 @@ function renderClientProjectList() {
           ${clientProjects.length > 0 ? `
             <div class="space-y-3">
               ${clientProjects.map(project => {
-      // 進捗率計算
       const pTasks = store.tasks.filter(t => {
         const minor = store.minorCats.find(m => m.id === t.minor_id);
         const major = minor ? store.majorCats.find(maj => maj.id === minor.major_id) : null;
@@ -573,7 +621,7 @@ function renderClientProjectList() {
 
       return `
                 <div onclick="loadProject('${project.id}')" 
-                     class="group/item flex items-center justify-between p-3 rounded-xl hover:bg-white hover:shadow-md transition-all cursor-pointer border border-transparent hover:border-indigo-100">
+                     class="group/item flex items-center justify-between p-3 rounded-xl hover:bg-white hover:shadow-md transition-all cursor-pointer border border-transparent hover:border-indigo-100 mouse-glow">
                   <div class="flex-1 min-w-0 mr-4">
                     <div class="font-bold text-gray-700 text-sm truncate group-hover/item:text-indigo-600 transition-colors">
                       ${project.name}
@@ -605,8 +653,8 @@ function renderClientProjectList() {
             </div>
           `}
         </div>
-      </div >
-      `;
+      </div>
+    `;
   });
 
   container.innerHTML = html;
@@ -690,10 +738,56 @@ async function saveProjectInfo() {
   document.getElementById('projectInfoModal').classList.remove('flex');
 }
 
+let CELL_WIDTH = 28; // 1日の幅(px) - 可変 (旧40pxの70%)
+let CELL_HEIGHT = 34; // 1行の高さ(px) - 可変 (旧48pxの70%)
+let currentZoom = 100;
+
+function changeZoom(delta) {
+  const newZoom = currentZoom + delta;
+  if (newZoom < 50 || newZoom > 200) return;
+  currentZoom = newZoom;
+
+  document.getElementById('zoomLevelDisplay').innerText = `${currentZoom}%`;
+
+  // ズーム率に合わせてセル幅と高さを変更
+  CELL_WIDTH = Math.floor(28 * (currentZoom / 100));
+  CELL_HEIGHT = Math.floor(34 * (currentZoom / 100));
+
+  // フォントサイズも調整
+  const container = document.getElementById('ganttView');
+  if (container) {
+    if (currentZoom < 80) container.style.fontSize = '10px';
+    else if (currentZoom < 100) container.style.fontSize = '11px';
+    else container.style.fontSize = '';
+  }
+
+  renderGantt();
+}
+
+function scrollToToday() {
+  const container = document.getElementById('ganttView');
+  if (!container || !ganttStartDate) return;
+
+  const today = dayjs();
+  const diffDays = today.diff(ganttStartDate, 'day');
+
+  // 画面中央より少し左にするため、画面幅の1/3くらいを引く
+  const offset = container.clientWidth / 3;
+  const scrollPos = (diffDays * CELL_WIDTH) - offset;
+
+  container.scrollTo({
+    left: Math.max(0, scrollPos),
+    behavior: 'smooth'
+  });
+}
+window.scrollToToday = scrollToToday;
+
 // --- 7. ガントチャート描画 ---
 let ganttStartDate; // グローバル変数
+
 function renderGantt() {
   const container = document.getElementById('ganttView');
+  if (!container) return;
   container.innerHTML = '';
 
   const majors = store.majorCats.filter(m => m.project_id === currentProjectId);
@@ -702,19 +796,16 @@ function renderGantt() {
     minorsMap[m.id] = store.minorCats.filter(mi => mi.major_id === m.id);
   });
 
-  // 期間設定: 今日を基準に前後1ヶ月
   const today = dayjs();
   const startDate = today.subtract(1, 'month').startOf('week');
   const endDate = today.add(1, 'month').endOf('week');
 
-  ganttStartDate = startDate; // グローバル変数にセット
+  ganttStartDate = startDate;
 
   const totalDays = endDate.diff(startDate, 'day') + 1;
 
-  // 初期スクロール位置調整 (今日 - 1週間)
   setTimeout(() => {
-    const container = document.querySelector('.gantt-container');
-    if (container) {
+    if (container.scrollLeft === 0) {
       const diffDays = today.diff(startDate, 'day') - 7;
       if (diffDays > 0) {
         container.scrollLeft = diffDays * CELL_WIDTH;
@@ -722,16 +813,18 @@ function renderGantt() {
     }
   }, 100);
 
-  // Corner
   const corner = document.createElement('div');
-  corner.className = 'sticky-corner p-2 flex items-center justify-between font-bold text-sm text-gray-600 h-12';
+  corner.className = 'sticky-corner p-2 flex items-center justify-between font-bold text-sm text-gray-600 border-r border-gray-200';
+  corner.style.height = `${CELL_HEIGHT}px`;
   corner.innerHTML = `
       <span>工程一覧</span>
-        <button onclick="openModal('major')" class="text-indigo-600 hover:bg-indigo-100 p-1 rounded"><i class="fas fa-plus"></i></button>
+      <div class="flex items-center space-x-1">
+        <button onclick="scrollToToday()" class="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-100 mr-2 mouse-glow" title="今日へ移動">今日</button>
+        <button onclick="openModal('major')" class="text-indigo-600 hover:bg-indigo-100 p-1 rounded mouse-glow"><i class="fas fa-plus"></i></button>
+      </div>
     `;
   container.appendChild(corner);
 
-  // Date header
   const dateHeader = document.createElement('div');
   dateHeader.className = 'sticky-header flex';
   dateHeader.style.width = `${totalDays * CELL_WIDTH}px`;
@@ -740,7 +833,8 @@ function renderGantt() {
     const d = startDate.add(i, 'day');
     const cell = document.createElement('div');
     cell.style.width = `${CELL_WIDTH}px`;
-    cell.className = `flex-shrink-0 text-center text-xs border-r border-gray-200 flex flex-col justify-center items-center h-12 ${getDateColorClass(d)}`;
+    cell.style.height = `${CELL_HEIGHT}px`;
+    cell.className = `flex-shrink-0 text-center text-xs border-r border-gray-200 flex flex-col justify-center items-center ${getDateColorClass(d)}`;
 
     const showMonth = (i === 0 || d.date() === 1);
     const monthText = showMonth ? d.format('M月') : '&nbsp;';
@@ -748,21 +842,26 @@ function renderGantt() {
 
     cell.innerHTML = `
       <div class="text-[10px] ${monthClass} font-bold leading-none mb-0.5">${monthText}</div>
-      <div class="font-bold leading-none">${d.format('D')}</div>
+      <div class="font-bold leading-none text-gray-700">${d.format('D')}</div>
       <div class="text-[10px] text-gray-500 leading-none mt-0.5">${d.format('dd')}</div>
     `;
     dateHeader.appendChild(cell);
   }
   container.appendChild(dateHeader);
 
-  // Body
   majors.forEach(major => {
     const minors = minorsMap[major.id];
 
     const majorRowLeft = document.createElement('div');
-    majorRowLeft.className = 'sticky-col bg-gray-100 border-b border-gray-300 p-2 font-bold text-gray-700 flex justify-between items-center h-12 cursor-move';
-    majorRowLeft.innerText = major.name;
-    majorRowLeft.innerHTML += `<button onclick="openModal('minor', '${major.id}')" class="text-xs bg-white border px-1 rounded text-gray-500 hover:text-indigo-600 ml-2"><i class="fas fa-plus"></i> 小分類</button>`;
+    majorRowLeft.className = 'sticky-col bg-gray-100 border-b border-gray-300 p-2 font-bold text-gray-700 flex justify-between items-center cursor-move';
+    majorRowLeft.style.height = `${CELL_HEIGHT}px`;
+    majorRowLeft.innerHTML = `
+      <div class="flex-1 cursor-pointer hover:text-indigo-600 flex items-center group/edit" onclick="openMajorEditModal('${major.id}')">
+        <span>${major.name}</span>
+        <i class="fas fa-pen text-[10px] text-gray-400 ml-2 opacity-0 group-hover/edit:opacity-100 transition-opacity"></i>
+      </div>
+      <button onclick="openModal('minor', '${major.id}')" class="text-xs bg-white border border-gray-300 px-1 rounded text-gray-500 hover:text-indigo-600 ml-2"><i class="fas fa-plus"></i> 小分類</button>
+    `;
 
     majorRowLeft.draggable = true;
     majorRowLeft.ondragstart = (e) => handleRowDragStart(e, 'major', major.id);
@@ -772,10 +871,10 @@ function renderGantt() {
     container.appendChild(majorRowLeft);
 
     const majorRowRight = document.createElement('div');
-    majorRowRight.className = 'border-b border-gray-300 bg-gray-100 h-12 flex';
+    majorRowRight.className = 'border-b border-gray-300 bg-gray-100 flex';
+    majorRowRight.style.height = `${CELL_HEIGHT}px`;
     majorRowRight.style.width = `${totalDays * CELL_WIDTH}px`;
 
-    // 大分類にも日付セルを追加して縦線を統一
     for (let i = 0; i < totalDays; i++) {
       const d = startDate.add(i, 'day');
       const cell = document.createElement('div');
@@ -788,14 +887,15 @@ function renderGantt() {
 
     minors.forEach(minor => {
       const minorLeft = document.createElement('div');
-      minorLeft.className = 'sticky-col border-b border-gray-200 p-2 pl-6 text-sm flex items-center justify-between h-12 cursor-move bg-white';
+      minorLeft.className = 'sticky-col border-b border-gray-200 p-2 pl-6 text-sm flex items-center justify-between cursor-move bg-white text-gray-600';
+      minorLeft.style.height = `${CELL_HEIGHT}px`;
       minorLeft.innerHTML = `
-      <div class="flex-1 cursor-pointer hover:text-indigo-600 flex items-center group/edit" onclick="openMinorEditModal('${minor.id}')">
+        <div class="flex-1 cursor-pointer hover:text-indigo-600 flex items-center group/edit" onclick="openMinorEditModal('${minor.id}')">
           <span>${minor.name}</span>
           <i class="fas fa-pen text-[10px] text-gray-300 ml-2 opacity-0 group-hover/edit:opacity-100 transition-opacity"></i>
         </div>
-      <i class="fas fa-chevron-right text-gray-300 text-xs"></i>
-    `;
+        <i class="fas fa-chevron-right text-gray-300 text-xs"></i>
+      `;
 
       minorLeft.draggable = true;
       minorLeft.ondragstart = (e) => handleRowDragStart(e, 'minor', minor.id);
@@ -805,7 +905,8 @@ function renderGantt() {
       container.appendChild(minorLeft);
 
       const rowRight = document.createElement('div');
-      rowRight.className = 'relative flex h-12 border-b border-gray-200';
+      rowRight.className = 'relative flex border-b border-gray-200';
+      rowRight.style.height = `${CELL_HEIGHT}px`;
       rowRight.style.width = `${totalDays * CELL_WIDTH}px`;
 
       for (let i = 0; i < totalDays; i++) {
@@ -817,7 +918,8 @@ function renderGantt() {
         rowRight.appendChild(cell);
       }
 
-      const tasks = store.tasks.filter(t => t.minor_id === minor.id);
+      const tasks = store.tasks.filter(t => String(t.minor_id) === String(minor.id));
+
       tasks.forEach(task => {
         const tStart = dayjs(task.start_date);
         const tEnd = dayjs(task.end_date);
@@ -834,30 +936,39 @@ function renderGantt() {
         if (task.status == 1) bgClass = 'bg-blue-500';
         if (task.status == 2) bgClass = 'bg-green-500';
 
+        const taskHeight = Math.floor(CELL_HEIGHT * 0.65);
+        const taskTop = Math.floor((CELL_HEIGHT - taskHeight) / 2);
+
         const taskBar = document.createElement('div');
-        taskBar.className = `absolute top - 2 h - 8 rounded shadow task - bar ${bgClass} text - white text - xs flex items - center px - 2 overflow - hidden whitespace - nowrap group`;
-        taskBar.style.left = `${leftPos} px`;
-        taskBar.style.width = `${widthPos - 2} px`;
+        taskBar.className = `absolute rounded shadow task-bar ${bgClass} text-white text-xs flex items-center px-2 overflow-hidden whitespace-nowrap group`;
+        taskBar.style.left = `${leftPos}px`;
+        taskBar.style.top = `${taskTop}px`;
+        taskBar.style.height = `${taskHeight}px`;
+        taskBar.style.width = `${Math.max(widthPos - 2, 4)}px`;
         taskBar.dataset.taskId = task.id;
 
+        // 担当者の抽出（memo から @username を探す）
+        const assigneeMatch = task.memo ? task.memo.match(/@(\w+)/) : null;
+        const assignee = assigneeMatch ? assigneeMatch[1] : null;
+        const assigneeInitial = assignee ? assignee.charAt(0).toUpperCase() : null;
+
         taskBar.innerHTML = `
-      <div class="resize-handle resize-handle-left opacity-0 group-hover:opacity-100 bg-white/30" data-direction="left"></div>
-          <span class="pointer-events-none select-none flex-1 text-center">${task.name}</span>
+          <div class="resize-handle resize-handle-left opacity-0 group-hover:opacity-100 bg-white/30" data-direction="left"></div>
+          ${assigneeInitial ? `<div class="w-5 h-5 rounded-full bg-white/30 flex items-center justify-center text-[10px] font-bold mr-1 flex-shrink-0">${assigneeInitial}</div>` : ''}
+          <span class="pointer-events-none select-none flex-1 text-center truncate">${task.name}</span>
           <div class="resize-handle resize-handle-right opacity-0 group-hover:opacity-100 bg-white/30" data-direction="right"></div>
-    `;
+        `;
         if (task.memo) taskBar.title = task.memo;
 
-        // リサイズハンドルのイベント
         const leftHandle = taskBar.querySelector('[data-direction="left"]');
         const rightHandle = taskBar.querySelector('[data-direction="right"]');
 
         leftHandle.addEventListener('mousedown', (e) => startResize(e, task.id, 'left'));
         rightHandle.addEventListener('mousedown', (e) => startResize(e, task.id, 'right'));
 
-        // タスクバー本体のドラッグ（リサイズハンドル以外）
         taskBar.addEventListener('mousedown', (e) => {
           if (e.target.classList.contains('resize-handle')) return;
-          if (e.detail === 2) { // ダブルクリック
+          if (e.detail === 2) {
             openTaskModal(task.id);
           } else {
             startDrag(e, task);
@@ -870,7 +981,87 @@ function renderGantt() {
       container.appendChild(rowRight);
     });
   });
+
+  // 依存関係の矢印を描画
+  renderDependencies(container);
 }
+
+// 依存関係の矢印描画
+function renderDependencies(container) {
+  // 既存のSVGレイヤーを削除
+  const existingSvg = document.getElementById('dependency-svg');
+  if (existingSvg) existingSvg.remove();
+
+  // SVGレイヤーを作成
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.id = 'dependency-svg';
+  svg.style.position = 'absolute';
+  svg.style.top = '0';
+  svg.style.left = '0';
+  svg.style.width = '100%';
+  svg.style.height = '100%';
+  svg.style.pointerEvents = 'none';
+  svg.style.zIndex = '5';
+  container.appendChild(svg);
+
+  // タスク間の依存関係を探す（memo に "depends:task_name" がある場合）
+  store.tasks.forEach(task => {
+    if (!task.memo) return;
+
+    const dependsMatch = task.memo.match(/depends:(.+?)(?:\s|$|@)/i);
+    if (!dependsMatch) return;
+
+    const dependsOnName = dependsMatch[1].trim();
+    const dependsOnTask = store.tasks.find(t => t.name === dependsOnName);
+    if (!dependsOnTask) return;
+
+    // 両方のタスクバーを取得
+    const fromBar = document.querySelector(`[data-task-id="${dependsOnTask.id}"]`);
+    const toBar = document.querySelector(`[data-task-id="${task.id}"]`);
+    if (!fromBar || !toBar) return;
+
+    // 座標計算
+    const fromRect = fromBar.getBoundingClientRect();
+    const toRect = toBar.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+
+    const x1 = fromRect.right - containerRect.left;
+    const y1 = fromRect.top + fromRect.height / 2 - containerRect.top;
+    const x2 = toRect.left - containerRect.left;
+    const y2 = toRect.top + toRect.height / 2 - containerRect.top;
+
+    // 矢印を描画
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const midX = (x1 + x2) / 2;
+    const d = `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`;
+    path.setAttribute('d', d);
+    path.setAttribute('stroke', '#4285F4');
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('marker-end', 'url(#arrowhead)');
+    svg.appendChild(path);
+  });
+
+  // 矢印のマーカーを定義
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+  marker.setAttribute('id', 'arrowhead');
+  marker.setAttribute('markerWidth', '10');
+  marker.setAttribute('markerHeight', '10');
+  marker.setAttribute('refX', '9');
+  marker.setAttribute('refY', '3');
+  marker.setAttribute('orient', 'auto');
+  const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  polygon.setAttribute('points', '0 0, 10 3, 0 6');
+  polygon.setAttribute('fill', '#4285F4');
+  marker.appendChild(polygon);
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+}
+
+// --- グローバル公開 ---
+window.changeZoom = changeZoom;
+// ... (他のエクスポートは維持)
 
 function getDateColorClass(d) {
   const today = dayjs();
@@ -924,7 +1115,7 @@ function onMouseMove(e) {
   }
 
   // ドラッグ中の表示更新
-  const taskBar = document.querySelector(`[data - task - id= "${dragTask.id}"]`);
+  const taskBar = document.querySelector(`[data-task-id= "${dragTask.id}"]`);
   if (taskBar) {
     taskBar.style.left = `${initialLeft + dx} px`;
   }
@@ -933,7 +1124,7 @@ function onMouseMove(e) {
 async function onMouseUp(e) {
   if (!isDragging || !dragTask) return;
 
-  const taskBar = document.querySelector(`[data - task - id= "${dragTask.id}"]`);
+  const taskBar = document.querySelector(`[data-task-id= "${dragTask.id}"]`);
   if (taskBar) {
     taskBar.style.transition = ''; // transition戻す
   }
@@ -978,6 +1169,8 @@ window.removeEventListener('mousemove', onMouseMove);
 window.removeEventListener('mouseup', onMouseUp);
 window.addEventListener('mousemove', onMouseMove);
 window.addEventListener('mouseup', onMouseUp);
+window.addEventListener('mousemove', onResizeMove);
+window.addEventListener('mouseup', onResizeUp);
 
 // --- タスクのリサイズ ---
 let isResizing = false;
@@ -996,7 +1189,7 @@ function startResize(e, taskId, direction) {
   resizeDirection = direction;
   resizeStartX = e.clientX;
 
-  const taskBar = document.querySelector(`[data - task - id= "${taskId}"]`);
+  const taskBar = document.querySelector(`[data-task-id= "${taskId}"]`);
   initialResizeLeft = parseFloat(taskBar.style.left);
   initialResizeWidth = parseFloat(taskBar.style.width);
 
@@ -1009,7 +1202,7 @@ function onResizeMove(e) {
   if (!isResizing || !resizeTask) return;
 
   const dx = e.clientX - resizeStartX;
-  const taskBar = document.querySelector(`[data - task - id= "${resizeTask.id}"]`);
+  const taskBar = document.querySelector(`[data-task-id= "${resizeTask.id}"]`);
   if (!taskBar) return;
 
   if (resizeDirection === 'right') {
@@ -1028,7 +1221,7 @@ function onResizeMove(e) {
 async function onResizeUp(e) {
   if (!isResizing || !resizeTask) return;
 
-  const taskBar = document.querySelector(`[data - task - id= "${resizeTask.id}"]`);
+  const taskBar = document.querySelector(`[data-task-id= "${resizeTask.id}"]`);
   if (taskBar) taskBar.style.transition = '';
 
   isResizing = false;
@@ -1072,7 +1265,50 @@ function handleRowDragStart(e, type, id) {
 function handleRowDrop(e, type, targetId) {
   e.preventDefault();
   e.stopPropagation();
-  // 省略（既存コードと同様）
+
+  const dragType = e.dataTransfer.getData('type');
+  const dragId = e.dataTransfer.getData('dragId');
+
+  if (dragType !== type || dragId === targetId) return;
+
+  let list, updateFunc;
+  if (type === 'major') {
+    list = store.majorCats.filter(m => m.project_id === currentProjectId);
+    updateFunc = updateMajorCat;
+  } else if (type === 'minor') {
+    const targetMinor = store.minorCats.find(m => m.id === targetId);
+    const dragMinor = store.minorCats.find(m => m.id === dragId);
+    if (!targetMinor || !dragMinor || targetMinor.major_id !== dragMinor.major_id) return;
+
+    list = store.minorCats.filter(m => m.major_id === targetMinor.major_id);
+    updateFunc = updateMinorCat;
+  } else {
+    return;
+  }
+
+  const dragIndex = list.findIndex(item => String(item.id) === String(dragId));
+  const targetIndex = list.findIndex(item => String(item.id) === String(targetId));
+
+  if (dragIndex === -1 || targetIndex === -1) return;
+
+  // 移動
+  const item = list.splice(dragIndex, 1)[0];
+  list.splice(targetIndex, 0, item);
+
+  // sort_order更新
+  const updates = list.map((item, index) => ({
+    id: item.id,
+    sort_order: (index + 1) * 1000
+  }));
+
+  try {
+    // 並列更新
+    Promise.all(updates.map(u => updateFunc(u.id, null, u.sort_order)))
+      .then(() => loadAllData());
+  } catch (error) {
+    console.error('Sort update failed:', error);
+    alert('並び替えに失敗しました');
+  }
 }
 
 function handleMinorDropOnMajor(e, targetMajorId) {
@@ -1106,13 +1342,13 @@ function openModal(type, parentId = null) {
   // プロジェクトモーダルをホーム画面から開いた場合、クライアント選択可能に
   if (type === 'project' && !currentClientId) {
     const clientSelectHTML = `
-      <div class="mb-4">
+        < div class="mb-4" >
         <label class="block text-sm font-medium text-gray-700 mb-1">クライアント選択</label>
         <select id="modalClientSelect" class="w-full border rounded p-2">
           ${store.clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
         </select>
       </div >
-      `;
+        `;
     const nameInput = document.getElementById('modalNameInput').parentElement;
     nameInput.insertAdjacentHTML('beforebegin', clientSelectHTML);
   }
@@ -1303,6 +1539,55 @@ function openMinorEditModal(minorId) {
   title.textContent = '小分類編集';
 }
 
+function openMajorEditModal(majorId) {
+  const major = store.majorCats.find(m => m.id === majorId);
+  if (!major) return;
+
+  const modal = document.getElementById('inputModal');
+  const title = document.getElementById('modalTitle');
+  const typeInput = document.getElementById('modalType');
+  const parentInput = document.getElementById('modalParentId');
+  const nameInput = document.getElementById('modalNameInput');
+  const taskFields = document.getElementById('taskFields');
+  const deleteBtn = document.getElementById('modalDeleteBtn');
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  typeInput.value = 'major_edit';
+  parentInput.value = majorId;
+  nameInput.value = major.name;
+  taskFields.classList.add('hidden');
+
+  deleteBtn.classList.remove('hidden');
+  deleteBtn.onclick = () => deleteMajorCat(majorId);
+
+  title.textContent = '大分類(工程)編集';
+}
+
+async function deleteMajorCat(id) {
+  if (!confirm('この工程と含まれる全ての小分類・タスクを削除しますか？')) return;
+  try {
+    // 関連データの削除 (カスケード設定があれば自動だが念のため)
+    // 小分類を取得
+    const minors = store.minorCats.filter(m => m.major_id === id);
+    const minorIds = minors.map(m => m.id);
+
+    if (minorIds.length > 0) {
+      await supabaseClient.from('tasks').delete().in('minor_id', minorIds);
+      await supabaseClient.from('minor_cats').delete().eq('major_id', id);
+    }
+
+    const { error } = await supabaseClient.from('major_cats').delete().eq('id', id);
+    if (error) throw error;
+
+    await loadAllData();
+    closeModal();
+  } catch (e) {
+    console.error('削除エラー:', e);
+    alert('削除に失敗しました');
+  }
+}
+
 async function updateMinor(id, name) {
   const { error } = await supabaseClient.from('minor_cats').update({ name }).eq('id', id);
   if (error) throw error;
@@ -1341,6 +1626,8 @@ async function submitModal() {
       await saveProject(clientId, name);
     } else if (type === 'major') {
       await saveMajorCat(currentProjectId, name);
+    } else if (type === 'major_edit') {
+      await updateMajorCat(parentId, name);
     } else if (type === 'minor') {
       await saveMinorCat(parentId, name);
     } else if (type === 'minor_edit') {
@@ -1395,6 +1682,51 @@ function renderApp() {
     renderProjectSelect();
     renderGantt();
   }
+
+  // 期限通知チェック
+  checkDeadlineNotifications();
+}
+
+// 期限通知機能
+function checkDeadlineNotifications() {
+  const today = dayjs();
+  const urgentTasks = store.tasks.filter(t => {
+    if (t.status === 2) return false; // 完了済みは除外
+    const endDate = dayjs(t.end_date);
+    const daysUntil = endDate.diff(today, 'day');
+    return daysUntil >= 0 && daysUntil <= 3; // 3日以内
+  });
+
+  if (urgentTasks.length > 0) {
+    showDeadlineToast(urgentTasks.length);
+  }
+}
+
+function showDeadlineToast(count) {
+  const existing = document.getElementById('deadline-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'deadline-toast';
+  toast.className = 'fixed top-20 right-6 bg-red-500 text-white px-6 py-4 rounded-lg shadow-xl z-50 animate-slide-in';
+  toast.innerHTML = `
+    <div class="flex items-center gap-3">
+      <i class="fas fa-exclamation-triangle text-2xl"></i>
+      <div>
+        <div class="font-bold">期限が近いタスクがあります</div>
+        <div class="text-sm opacity-90">${count}件のタスクが3日以内に期限を迎えます</div>
+      </div>
+      <button onclick="this.parentElement.parentElement.remove()" class="ml-4 hover:bg-red-600 px-2 py-1 rounded">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  `;
+  document.body.appendChild(toast);
+
+  // 10秒後に自動で消す
+  setTimeout(() => {
+    if (toast.parentElement) toast.remove();
+  }, 10000);
 }
 
 // --- 12. AIチャット機能 ---
@@ -1632,3 +1964,4 @@ window.changeApiKey = changeApiKey;
 window.renderClientProjectList = renderClientProjectList;
 window.handleMinorDropOnMajor = handleMinorDropOnMajor;
 window.openLocalNewsModal = openLocalNewsModal;
+window.changeZoom = changeZoom;
