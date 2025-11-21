@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>福笑いメッシュアニメーター (PixiJS版)</title>
+    <script src="https://pixijs.download/v7.3.2/pixi.min.js"></script>
+    <style>
+        body {
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            text-align: center;
+            background-color: #333;
+            /* 画面が見やすいように暗く */
+            color: white;
+            margin: 0;
+            padding: 20px;
+            overflow: hidden;
+            /* スクロール防止 */
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+            font-size: 1.5rem;
+        }
+
+        #ui-container {
+            margin-bottom: 10px;
+        }
+
+        /* キャンバスを重ねて表示するためのラッパー */
+        #canvas-wrapper {
+            position: relative;
+            display: inline-block;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            border: 2px solid #555;
+            background-color: #000;
+        }
+
+        /* PixiJSが描画するキャンバス */
+        #pixi-canvas {
+            display: block;
+        }
+
+        /* ユーザーが線を描くための透明キャンバス（UI用） */
+        #draw-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: crosshair;
+            touch-action: none;
+            /* スマホでのスクロール防止 */
+        }
+
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+
+        .active-type {
+            background-color: #28a745;
+            /* 選択中のボタン色 */
+            box-shadow: 0 0 5px white;
+        }
+
+        #instructions {
+            font-size: 0.9rem;
+            color: #ccc;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>福笑いメッシュアニメーター</h1>
+
+    <div id="ui-container">
+        <input type="file" id="fileInput" accept="image/*">
+        <button id="resetBtn" onclick="location.reload()" style="display:none;">リセット</button>
+
+        <div id="tool-panel" style="display:none; margin-top:10px;">
+            <span>動きの種類: </span>
+            <button onclick="setAnimType('blink')" id="btn-blink" class="active-type">まばたき（目）</button>
+            <button onclick="setAnimType('talk')" id="btn-talk">パクパク（口）</button>
+            <button onclick="setAnimType('breathe')" id="btn-breathe">ふわふわ（鼻/眉）</button>
+        </div>
+        <div id="instructions">画像をアップロードしてください</div>
+    </div>
+
+    <div id="canvas-wrapper">
+    </div>
+
+    <script>
+        // --- 変数定義 ---
+        let app; // PixiJS Application
+        let baseTexture; // 元画像のテクスチャ
+        let imgSprite; // 背景として表示する画像
+
+        const drawCanvas = document.createElement('canvas'); // 線を描く用
+        drawCanvas.id = 'draw-canvas';
+        const drawCtx = drawCanvas.getContext('2d');
+
+        let isDrawing = false;
+        let points = []; // 描画した線の座標リスト
+        let currentAnimType = 'blink'; // 現在選択中のアニメーションタイプ
+
+        // アニメーションさせるメッシュのリスト
+        const animatedMeshes = [];
+
+        // --- 初期化処理 ---
+        const wrapper = document.getElementById('canvas-wrapper');
+        const fileInput = document.getElementById('fileInput');
+        const instructions = document.getElementById('instructions');
+        const toolPanel = document.getElementById('tool-panel');
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                initPixi(event.target.result);
+            }
+            reader.readAsDataURL(file);
+        });
+
+        // PixiJSの起動
+        function initPixi(imageUrl) {
+            // UI切り替え
+            fileInput.style.display = 'none';
+            document.getElementById('resetBtn').style.display = 'inline-block';
+            toolPanel.style.display = 'block';
+            instructions.textContent = "動かしたい部分をマウスで囲ってください（始点と終点が繋がります）";
+
+            // 画像サイズを取得するために一時的にImageオブジェクト作成
+            const img = new Image();
+            img.onload = () => {
+                // 画面サイズに合わせて縮小
+                const maxWidth = 800;
+                const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+                const w = img.width * scale;
+                const h = img.height * scale;
+
+                // PixiJSアプリ作成
+                app = new PIXI.Application({
+                    width: w,
+                    height: h,
+                    backgroundColor: 0x333333,
+                    antialias: true
+                });
+                app.view.id = 'pixi-canvas';
+                wrapper.appendChild(app.view);
+
+                // 手書き用Canvasの設定
+                drawCanvas.width = w;
+                drawCanvas.height = h;
+                wrapper.appendChild(drawCanvas); // Pixiの上に重ねる
+                setupDrawingEvents();
+
+                // 画像をPixiにロード
+                PIXI.Assets.load(imageUrl).then((texture) => {
+                    baseTexture = texture;
+
+                    // 背景画像の配置
+                    imgSprite = new PIXI.Sprite(texture);
+                    imgSprite.width = w;
+                    imgSprite.height = h;
+                    app.stage.addChild(imgSprite);
+
+                    // アニメーションループ開始
+                    app.ticker.add((delta) => {
+                        updateAnimation(delta);
+                    });
+                });
+            };
+            img.src = imageUrl;
+        }
+
+        // --- 描画イベント（投げ縄選択） ---
+        function setupDrawingEvents() {
+            drawCanvas.addEventListener('mousedown', startDraw);
+            drawCanvas.addEventListener('mousemove', moveDraw);
+            drawCanvas.addEventListener('mouseup', endDraw);
+
+            // タッチ対応
+            drawCanvas.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // スクロール防止
+                const t = e.touches[0];
+                startDraw({ clientX: t.clientX, clientY: t.clientY });
+            });
+            drawCanvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                const t = e.touches[0];
+                moveDraw({ clientX: t.clientX, clientY: t.clientY });
+            });
+            drawCanvas.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                endDraw();
+            });
+        }
+
+        function getPos(e) {
+            const rect = drawCanvas.getBoundingClientRect();
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+
+        function startDraw(e) {
+            isDrawing = true;
+            points = [];
+            points.push(getPos(e));
+            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+            drawCtx.beginPath();
+            drawCtx.moveTo(points[0].x, points[0].y);
+        }
+
+        function moveDraw(e) {
+            if (!isDrawing) return;
+            const p = getPos(e);
+            points.push(p);
+            drawCtx.lineTo(p.x, p.y);
+            drawCtx.strokeStyle = 'cyan';
+            drawCtx.lineWidth = 3;
+            drawCtx.stroke();
+        }
+
+        function endDraw() {
+            if (!isDrawing) return;
+            isDrawing = false;
+            drawCtx.closePath(); // 線を閉じる
+            drawCtx.stroke();
+
+            // 短すぎる線は無視
+            if (points.length < 10) {
+                drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+                return;
+            }
+
+            // 囲った範囲からメッシュを生成
+            createMeshFromSelection(points);
+
+            // 線を消す
+            setTimeout(() => {
+                drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+            }, 500);
+        }
+
+        // --- メッシュ生成の核心部分 ---
+        function createMeshFromSelection(pointList) {
+            // 1. 囲まれた範囲のバウンディングボックス（四角枠）を計算
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            pointList.forEach(p => {
+                if (p.x < minX) minX = p.x;
+                if (p.y < minY) minY = p.y;
+                if (p.x > maxX) maxX = p.x;
+                if (p.y > maxY) maxY = p.y;
+            });
+
+            // マージンを追加（動きの余白のため）
+            const margin = 10;
+            minX = Math.max(0, minX - margin);
+            minY = Math.max(0, minY - margin);
+            maxX = Math.min(app.screen.width, maxX + margin);
+            maxY = Math.min(app.screen.height, maxY + margin);
+
+            const width = maxX - minX;
+            const height = maxY - minY;
+
+            // 2. メッシュ（SimplePlane）を作成
+            // グリッドの細かさ。細かいほど滑らかに動く (10x10分割)
+            const segX = 10;
+            const segY = 10;
+
+            // 元画像からこの範囲だけのテクスチャを切り出す設定
+            // 注意: 実際にCanvasを切るのではなく、参照範囲を指定するだけ
+            // 画像の元の大きさと、現在の表示サイズの比率を計算
+            const scaleX = baseTexture.width / app.screen.width;
+            const scaleY = baseTexture.height / app.screen.height;
+
+            const frame = new PIXI.Rectangle(minX * scaleX, minY * scaleY, width * scaleX, height * scaleY);
+            const cropTexture = new PIXI.Texture(baseTexture.baseTexture, frame);
+
+            // メッシュ作成
+            const plane = new PIXI.SimplePlane(cropTexture, segX, segY);
+            plane.x = minX;
+            plane.y = minY;
+            plane.width = width;
+            plane.height = height;
+
+            // 3. 頂点ごとの「動きやすさ（ウェイト）」を計算
+            // 中心に近い頂点はよく動き、端の頂点は動かない（固定）ようにする
+            // これにより背景とシームレスに繋がる
+            const weights = [];
+            const buffer = plane.geometry.getBuffer('aVertexPosition');
+
+            for (let i = 0; i < buffer.data.length; i += 2) {
+                // 0.0〜1.0の正規化座標（メッシュ内での相対位置）
+                // SimplePlaneの頂点は左上から右下へ並んでいる前提
+                const col = (i / 2) % segX;
+                const row = Math.floor((i / 2) / segX);
+
+                // 中心からの距離を計算 (0.0:中心, 1.0:端)
+                // 簡易的に、端に行くほどウェイトを0にするSin波を使う
+                // x方向の重み: 端は0, 中心は1
+                // y方向の重み: 端は0, 中心は1
+                // 厳密な円形判定ではないが、プロトタイプとしては十分
+
+                // 頂点の相対位置 (0~1)
+                const nx = (buffer.data[i] / width);
+                const ny = (buffer.data[i + 1] / height);
+
+                // 端っこに近いほど動かないようにする数学関数（放物線のようなもの）
+                // 4 * x * (1-x) は x=0.5で1、x=0,1で0になる
+                const wx = Math.sin(nx * Math.PI);
+                const wy = Math.sin(ny * Math.PI);
+
+                // 最終的なウェイト (端は0になるので背景とズレない！)
+                weights.push(wx * wy);
+            }
+
+            // メッシュ情報を保存
+            animatedMeshes.push({
+                mesh: plane,
+                baseBuffer: Float32Array.from(buffer.data), // 初期の頂点位置を記憶
+                weights: weights,
+                type: currentAnimType,
+                timeOffset: Math.random() * 10 // 動きのタイミングをバラけさせる
+            });
+
+            app.stage.addChild(plane);
+        }
+
+        // --- アニメーション更新ループ ---
+        function updateAnimation(delta) {
+            // 時間の経過 (ミリ秒 / 1000)
+            const time = app.ticker.lastTime / 1000;
+
+            animatedMeshes.forEach(item => {
+                const { mesh, baseBuffer, weights, type, timeOffset } = item;
+                const buffer = mesh.geometry.getBuffer('aVertexPosition');
+                const t = time + timeOffset;
+
+                // アニメーションの種類に応じた動きの計算
+                let moveX = 0;
+                let moveY = 0;
+                let scaleY = 1;
+                let scaleX = 1;
+
+                if (type === 'blink') {
+                    // 瞬き: 周期的にY軸方向に縮む
+                    // sin波で 0.2 ~ 1.0 の間を行き来させる
+                    const cycle = Math.sin(t * 5);
+                    // 閉じる(縮む)のは一瞬だけにするための計算
+                    scaleY = cycle > 0.8 ? 1 - (cycle - 0.8) * 4 : 1;
+                    // 上瞼と下瞼がくっつくイメージ
+                } else if (type === 'talk') {
+                    // パクパク: 縦に伸び縮み
+                    scaleY = 1 + Math.sin(t * 8) * 0.2;
+                } else if (type === 'breathe') {
+                    // ふわふわ: 全体が少し拡大縮小
+                    scaleX = 1 + Math.sin(t * 2) * 0.05;
+                    scaleY = 1 + Math.sin(t * 2) * 0.05;
+                }
+
+                // 全頂点を更新
+                for (let i = 0; i < buffer.data.length; i += 2) {
+                    const originalX = baseBuffer[i];
+                    const originalY = baseBuffer[i + 1];
+                    const weight = weights[i / 2]; // この頂点の重み(0~1)
+
+                    // メッシュの中心座標
+                    const centerX = mesh.width / 2;
+                    const centerY = mesh.height / 2;
+
+                    // 中心からの差分
+                    const dx = originalX - centerX;
+                    const dy = originalY - centerY;
+
+                    // 変形を適用
+                    // 重みが1に近い(中心)ほど強く変形、0(端)は変形しない
+                    // これにより「端は固定されたまま、中だけ動く」ゴムのような表現になる
+
+                    const targetX = centerX + dx * scaleX;
+                    const targetY = centerY + dy * scaleY;
+
+                    // 現在位置 = 元の位置 + (目標位置 - 元の位置) * 重み
+                    buffer.data[i] = originalX + (targetX - originalX) * weight;
+                    buffer.data[i + 1] = originalY + (targetY - originalY) * weight;
+                }
+
+                mesh.geometry.getBuffer('aVertexPosition').update();
+            });
+        }
+
+        // ツールボタン切り替え
+        function setAnimType(type) {
+            currentAnimType = type;
+            document.querySelectorAll('#tool-panel button').forEach(btn => {
+                btn.classList.remove('active-type');
+            });
+            document.getElementById('btn-' + type).classList.add('active-type');
+        }
+
+    </script>
+</body>
+
+</html>

@@ -8,261 +8,16 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dayjs@1/locale/ja.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/relativeTime.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/isBetween.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <style>
-    /* カスタムスクロールバー */
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: #f1f1f1;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: #888;
-      border-radius: 4px;
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: #555;
-    }
-
-    /* ガントチャートのグリッド定義 */
-    .gantt-container {
-      display: grid;
-      grid-template-columns: 250px 1fr;
-      /* 左サイドパネル固定幅 + 可変カレンダー */
-      height: calc(100vh - 64px);
-      /* ヘッダー分引く */
-      overflow: auto;
-      position: relative;
-      align-content: start;
-    }
-
-    /* 左側の固定列（工程名） */
-    .sticky-col {
-      position: sticky;
-      left: 0;
-      background: white;
-      z-index: 20;
-      border-right: 2px solid #e5e7eb;
-    }
-
-    /* 上部の固定行（日付） */
-    .sticky-header {
-      position: sticky;
-      top: 0;
-      background: #f9fafb;
-      z-index: 10;
-      border-bottom: 1px solid #e5e7eb;
-    }
-
-    /* 左上の交差部分（一番手前に表示） */
-    .sticky-corner {
-      position: sticky;
-      top: 0;
-      left: 0;
-      z-index: 30;
-      background: #f3f4f6;
-      border-bottom: 1px solid #e5e7eb;
-      border-right: 2px solid #e5e7eb;
-    }
-
-    /* タスクバーのスタイル */
-    .task-bar {
-      transition: all 0.2s;
-      cursor: grab;
-    }
-
-    .task-bar:active {
-      cursor: grabbing;
-    }
-
-    /* 休日背景 */
-    .is-weekend {
-      background-color: #fee2e2;
-    }
-
-    /* 薄い赤 */
-    .is-saturday {
-      background-color: #eff6ff;
-    }
-
-    /* 薄い青 */
-
-    @keyframes fadeIn {
-      from {
-        opacity: 0;
-        transform: translateY(-10px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .animate-fadeIn {
-      animation: fadeIn 0.3s ease-out;
-    }
-
-    /* リサイズハンドル */
-    .resize-handle {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      width: 6px;
-      cursor: col-resize;
-      z-index: 10;
-    }
-
-    .resize-handle-left {
-      left: 0;
-    }
-
-    .resize-handle-right {
-      right: 0;
-    }
-
-    /* カードスタイル */
-    .project-card {
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-
-    .project-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    }
-
-    /* AIチャットウィンドウ */
-    .chat-window {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      width: 400px;
-      max-height: 600px;
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-      display: flex;
-      flex-direction: column;
-      z-index: 100;
-    }
-
-    .chat-messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-      max-height: 400px;
-    }
-
-    .chat-fab {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      width: 60px;
-      height: 60px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 24px;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      transition: transform 0.2s;
-      z-index: 99;
-    }
-
-    .chat-fab:hover {
-      transform: scale(1.1);
-    }
-
-    .task-recommendation {
-      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-      color: white;
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 12px;
-      transition: transform 0.2s;
-    }
-
-    .task-recommendation:hover {
-      transform: translateX(4px);
-    }
-
-    /* Remove infinite canvas styles */
-    /* Removed infinite canvas styles
-      width: 100%;
-      height: calc(100vh - 64px);
-      overflow: hidden;
-      position: relative;
-      background:
-        linear-gradient(90deg, rgba(0, 0, 0, .03) 1px, transparent 1px),
-        linear-gradient(rgba(0, 0, 0, .03) 1px, transparent 1px);
-      background-size: 50px 50px;
-      cursor: grab;
-    }
-
-    .infinite-canvas.dragging {
-      cursor: grabbing;
-    }
-
-    .canvas-viewport {
-      transform-origin: 0 0;
-      transition: transform 0.1s ease-out;
-    }
-
-    .mind-node {
-      position: absolute;
-      min-width: 150px;
-      padding: 12px 16px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      cursor: move;
-      user-select: none;
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-
-    .mind-node:hover {
-      transform: scale(1.05);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-    }
-
-    .gantt-zone {
-      position: absolute;
-      right: 0;
-      top: 0;
-      width: 60%;
-      height: 100%;
-      background: rgba(99, 102, 241, 0.05);
-      border-left: 2px dashed rgba(99, 102, 241, 0.3);
-    }
-
-    .zoom-controls {
-      position: absolute;
-      bottom: 20px;
-      right: 20px;
-      display: flex;
-      gap: 8px;
-      background: white;
-      padding: 8px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    }
-    */
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 
-<body class="bg-gray-50 text-gray-800 font-sans">
+<body class="bg-gray-50 text-gray-800 font-sans selection:bg-indigo-100 selection:text-indigo-700">
 
   <header class="h-16 bg-white/80 backdrop-blur-md border-b flex items-center px-6 justify-between sticky top-0 z-50">
     <div class="flex items-center space-x-6">
@@ -314,54 +69,129 @@
     </div>
 
     <div class="flex items-center space-x-4">
-      <button onclick="resetData()"
-        class="text-xs text-red-400 hover:text-red-600 font-medium transition-colors">データ初期化</button>
+      <!-- データ初期化ボタン削除 -->
     </div>
   </header>
 
-  <!-- ホーム画面 (直近のプロジェクト) -->
-  <div id="homeView" class="container mx-auto px-6 py-12">
-    <div class="flex justify-between items-center mb-6">
+  <!-- ホーム画面 -->
+  <div id="homeView" class="container mx-auto px-6 py-8">
+    <!-- ヘッダーエリア -->
+    <div class="flex justify-between items-end mb-8">
       <div>
-        <h2 class="text-3xl font-bold text-gray-800 mb-2">Welcome Back</h2>
-        <p class="text-gray-500" id="todayDate"></p>
+        <h2
+          class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 tracking-tight">
+          Dashboard</h2>
+        <p class="text-gray-500 font-medium mt-1" id="todayDate"></p>
       </div>
-      <div class="space-x-2">
+      <div class="flex space-x-3">
         <button onclick="openModal('client')"
-          class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
-          <i class="fas fa-user-plus mr-2"></i>クライアント追加
+          class="px-4 py-2 bg-white border border-indigo-100 text-indigo-600 rounded-xl hover:bg-indigo-50 transition-all shadow-sm hover:shadow font-bold text-sm">
+          <i class="fas fa-user-plus mr-2"></i>クライアント
         </button>
         <button onclick="openModal('project')"
-          class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-          id="homeAddProjectBtn">
+          class="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:shadow-lg hover:scale-105 transition-all font-bold text-sm shadow-md">
           <i class="fas fa-folder-plus mr-2"></i>案件追加
         </button>
       </div>
     </div>
 
-    <!-- 今日のタスクレコメンド -->
-    <div id="todayRecommendations" class="mb-8">
-      <h3 class="text-xl font-bold text-gray-800 mb-4"><i class="fas fa-star text-yellow-500 mr-2"></i>今日すべきこと</h3>
-      <div id="recommendationsList">
-        <!-- JSで生成 -->
+    <!-- ダッシュボードグリッド -->
+    <div class="grid grid-cols-12 gap-6 mb-12">
+
+      <!-- 左カラム: 時計・天気 -->
+      <div class="col-span-12 lg:col-span-4 space-y-6">
+        <!-- 時計 & 天気 -->
+        <div
+          class="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+          <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full blur-xl"></div>
+          <div class="absolute bottom-0 left-0 -mb-4 -ml-4 w-32 h-32 bg-indigo-300 opacity-10 rounded-full blur-xl">
+          </div>
+
+          <div class="flex justify-between items-start relative z-10">
+            <div>
+              <div id="digitalClock" class="text-5xl font-bold tracking-tight font-mono mb-1">--:--</div>
+              <div class="text-sm opacity-80 flex items-center">
+                <span id="todayDateDisplay"></span>
+              </div>
+            </div>
+            <div id="weatherInfo" class="text-right">
+              <!-- JSで天気情報を挿入 -->
+              <div class="text-2xl font-bold">Loading...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ニュースフィード -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 h-[400px] flex flex-col">
+          <h3 class="font-bold text-gray-800 mb-4 flex items-center">
+            <i class="fas fa-newspaper text-indigo-500 mr-2"></i>Today's News
+          </h3>
+          <div id="newsList" class="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+            <!-- JSで生成 -->
+            <div class="animate-pulse space-y-3">
+              <div class="h-4 bg-gray-100 rounded w-3/4"></div>
+              <div class="h-4 bg-gray-100 rounded w-full"></div>
+              <div class="h-4 bg-gray-100 rounded w-5/6"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 中央・右カラム: 週間タスク & プロジェクト -->
+      <div class="col-span-12 lg:col-span-8 space-y-6">
+
+        <!-- 週間タスク -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-gray-800 flex items-center text-lg">
+              <i class="fas fa-calendar-week text-indigo-500 mr-2"></i>Upcoming Tasks (7 Days)
+            </h3>
+            <span class="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded-full font-bold" id="upcomingCount">0
+              tasks</span>
+          </div>
+          <div id="upcomingTasksList" class="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+            <!-- JSで生成 -->
+            <div class="text-center py-8 text-gray-400">
+              <p>No upcoming tasks</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- プロジェクト一覧 (既存のものを少し調整) -->
+        <div>
+          <div class="flex items-center mb-4">
+            <h3 class="font-bold text-gray-800 flex items-center text-lg">
+              <i class="fas fa-layer-group text-indigo-500 mr-2"></i>Projects
+            </h3>
+          </div>
+          <div id="clientProjectList" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- JSで生成 -->
+          </div>
+        </div>
+
       </div>
     </div>
 
-    <h3 class="text-xl font-bold text-gray-800 mb-4">最近のプロジェクト</h3>
-    <div id="recentProjectsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      <!-- JSで生成 -->
-    </div>
-
-    <div id="noRecentProjects" class="hidden text-center py-20 text-gray-400">
-      <i class="fas fa-folder-open text-6xl mb-4 opacity-50"></i>
-      <p>プロジェクトがまだありません。<br>上のボタンからクライアントと案件を作成してください。</p>
+    <!-- 空の状態（データがない場合） -->
+    <div id="emptyState" class="hidden flex-col items-center justify-center py-20 text-gray-400">
+      <div class="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-6 animate-bounce">
+        <i class="fas fa-cube text-4xl text-gray-300"></i>
+      </div>
+      <p class="text-lg font-medium text-gray-500">まだプロジェクトがありません</p>
+      <p class="text-sm text-gray-400 mt-2">右上のボタンからクライアントと案件を追加してください</p>
     </div>
   </div>
 
   <main id="mainArea" class="relative hidden">
     <!-- 案件情報エリア -->
-    <div id="projectInfoArea" class="bg-white border-b px-6 py-4 hidden">
-      <div class="flex justify-between items-start">
+    <div id="projectInfoArea"
+      class="bg-white/90 backdrop-blur-sm border-b px-6 py-4 hidden sticky top-16 z-40 shadow-sm">
+      <div class="flex items-start gap-4">
+        <button onclick="showHome()"
+          class="mt-1 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+          title="ホームに戻る">
+          <i class="fas fa-arrow-left"></i>
+        </button>
         <div class="flex-1">
           <div class="flex items-center gap-3 mb-2">
             <h2 id="infoProjectName" class="text-2xl font-bold text-gray-800">案件名</h2>
@@ -377,38 +207,6 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- クライアント・案件一覧 -->
-    <div class="mb-12">
-      <div class="flex items-center justify-between mb-6">
-        <h2 class="text-xl font-bold text-gray-800 flex items-center">
-          <i class="fas fa-folder-open text-indigo-500 mr-3"></i>Projects
-        </h2>
-        <div class="flex space-x-3">
-          <button onclick="openModal('client')"
-            class="text-sm bg-white border border-gray-200 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors shadow-sm">
-            <i class="fas fa-plus mr-2"></i>クライアント
-          </button>
-          <button onclick="openModal('project')"
-            class="text-sm bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-md">
-            <i class="fas fa-plus mr-2"></i>案件
-          </button>
-        </div>
-      </div>
-
-      <div id="clientProjectList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <!-- JavaScriptでここにカードを生成 -->
-      </div>
-    </div>
-
-    <!-- 空の状態（データがない場合） -->
-    <div id="emptyState" class="hidden flex-col items-center justify-center py-20 text-gray-400">
-      <div class="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">
-        <i class="fas fa-cube text-4xl text-gray-300"></i>
-      </div>
-      <p class="text-lg font-medium text-gray-500">まだプロジェクトがありません</p>
-      <p class="text-sm text-gray-400 mt-2">右上のボタンからクライアントと案件を追加してください</p>
     </div>
 
     <div id="ganttView" class="hidden gantt-container shadow-inner bg-white">
@@ -446,8 +244,7 @@
     <div class="p-4 border-t">
       <div class="flex gap-2">
         <input type="text" id="chatInput" placeholder="質問を入力..."
-          class="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-          onkeydown="if(event.key==='Enter') sendChatMessage()">
+          class="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
         <button onclick="sendChatMessage()"
           class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
           <i class="fas fa-paper-plane"></i>
@@ -484,14 +281,6 @@
 
       <div class="mb-4">
         <label class="block text-sm font-medium text-gray-700 mb-1">APIキー</label>
-        <input type="text" id="geminiApiKeyInput"
-          class="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-mono"
-          placeholder="AIza...で始まる文字列を貼り付けてください">
-      </div>
-
-      <div class="flex justify-end space-x-3">
-        <button onclick="closeApiKeyModal()"
-          class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">キャンセル</button>
         <button onclick="saveApiKey()"
           class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-md transition-colors">
           <i class="fas fa-save mr-2"></i>保存して使用
@@ -519,12 +308,17 @@
             placeholder="例: 営業部, クライアントA氏">
         </div>
       </div>
-      <div class="flex justify-end space-x-3 mt-6">
-        <button
-          onclick="document.getElementById('projectInfoModal').classList.add('hidden'); document.getElementById('projectInfoModal').classList.remove('flex')"
-          class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">キャンセル</button>
-        <button onclick="saveProjectInfo()"
-          class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-md transition-colors">保存</button>
+      <div class="flex justify-between items-center mt-6">
+        <button onclick="deleteProject(currentProjectId)" class="text-red-500 hover:text-red-700 text-sm font-medium">
+          <i class="fas fa-trash-alt mr-1"></i>案件を削除
+        </button>
+        <div class="flex space-x-3">
+          <button
+            onclick="document.getElementById('projectInfoModal').classList.add('hidden'); document.getElementById('projectInfoModal').classList.remove('flex')"
+            class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">キャンセル</button>
+          <button onclick="saveProjectInfo()"
+            class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-md transition-colors">保存</button>
+        </div>
       </div>
     </div>
   </div>
@@ -581,1060 +375,47 @@
         </div>
       </div>
 
-      <div class="flex justify-end space-x-2 mt-6">
-        <button onclick="closeModal()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded">キャンセル</button>
-        <button onclick="submitModal()"
-          class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">保存</button>
+      <div class="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
+        <button type="button" onclick="handleDelete()" id="modalDeleteBtn"
+          class="text-red-500 hover:text-red-700 text-sm font-medium hidden">
+          <i class="fas fa-trash-alt mr-1"></i>削除
+        </button>
+        <div class="flex space-x-3 ml-auto">
+          <button onclick="closeModal('task')"
+            class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">キャンセル</button>
+          <button onclick="submitModal()"
+            class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-md transition-colors font-medium">保存</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <script>
-    // --- 1. Supabase初期化 ---
-    const SUPABASE_URL = 'https://dsuiaaaxwwvhiqktgvoi.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzdWlhYWF4d3d2aGlxa3Rndm9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMxODcxODQsImV4cCI6MjA3ODc2MzE4NH0.ng7SlvSE25Ef_EZZeTe5F2tGcHNco1x1iZ_Nx4ewohg';
-    const { createClient } = supabase;
-    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    // Gemini API Key (localStorageに保存)
-    let GEMINI_API_KEY = localStorage.getItem('gemini_api_key') || '';
-
-    // --- 2. データ管理 ---
-    dayjs.locale('ja');
-    const CELL_WIDTH = 40;
-
-    let store = {
-      clients: [],
-      projects: [],
-      majorCats: [],
-      minorCats: [],
-      tasks: []
-    };
-
-    let currentClientId = null;
-    let currentProjectId = null;
-
-    // --- 3. Supabase CRUD操作 ---
-    async function loadAllData() {
-      try {
-        const [clients, projects, majors, minors, tasks] = await Promise.all([
-          supabaseClient.from('clients').select('*').order('created_at'),
-          supabaseClient.from('projects').select('*').order('created_at'),
-          supabaseClient.from('major_cats').select('*').order('sort_order'),
-          supabaseClient.from('minor_cats').select('*').order('sort_order'),
-          supabaseClient.from('tasks').select('*').order('created_at')
-        ]);
-
-        store.clients = clients.data || [];
-        store.projects = projects.data || [];
-        store.majorCats = majors.data || [];
-        store.minorCats = minors.data || [];
-        store.tasks = tasks.data || [];
-
-        renderApp();
-      } catch (error) {
-        console.error('データ読み込みエラー:', error);
-        alert('データの読み込みに失敗しました');
-      }
-    }
-
-    async function saveClient(name) {
-      const { data, error } = await supabaseClient.from('clients').insert({ name }).select();
-      if (error) throw error;
-      return data[0];
-    }
-
-    async function saveProject(clientId, name) {
-      const { data, error } = await supabaseClient.from('projects')
-        .insert({ client_id: clientId, name }).select();
-      if (error) throw error;
-      return data[0];
-    }
-
-    async function saveMajorCat(projectId, name) {
-      const { data, error } = await supabaseClient.from('major_cats')
-        .insert({ project_id: projectId, name }).select();
-      if (error) throw error;
-      return data[0];
-    }
-
-    async function saveMinorCat(majorId, name) {
-      const { data, error } = await supabaseClient.from('minor_cats')
-        .insert({ major_id: majorId, name }).select();
-      if (error) throw error;
-      return data[0];
-    }
-
-    async function saveTask(task) {
-      const { data, error } = await supabaseClient.from('tasks')
-        .insert({
-          minor_id: task.minorId,
-          name: task.name,
-          start_date: task.startDate,
-          end_date: task.endDate,
-          status: task.status,
-          memo: task.memo
-        }).select();
-      if (error) throw error;
-      return data[0];
-    }
-
-    async function updateTask(id, updates) {
-      const dbUpdates = {};
-      if (updates.name) dbUpdates.name = updates.name;
-      if (updates.startDate) dbUpdates.start_date = updates.startDate;
-      if (updates.endDate) dbUpdates.end_date = updates.endDate;
-      if (updates.status !== undefined) dbUpdates.status = updates.status;
-      if (updates.memo !== undefined) dbUpdates.memo = updates.memo;
-      if (updates.minorId) dbUpdates.minor_id = updates.minorId;
-
-      const { error } = await supabaseClient.from('tasks').update(dbUpdates).eq('id', id);
-      if (error) throw error;
-    }
-
-    async function updateProjectInfo(id, overview, stakeholders) {
-      const { error } = await supabaseClient.from('projects')
-        .update({ overview, stakeholders }).eq('id', id);
-      if (error) throw error;
-    }
-
-    async function resetData() {
-      if (!confirm('全データを削除して初期化しますか？')) return;
-
-      try {
-        await Promise.all([
-          supabaseClient.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-          supabaseClient.from('minor_cats').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-          supabaseClient.from('major_cats').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-          supabaseClient.from('projects').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-          supabaseClient.from('clients').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-        ]);
-        location.reload();
-      } catch (error) {
-        console.error('削除エラー:', error);
-        alert('削除に失敗しました');
-      }
-    }
-
-    // --- 4. 初期化 ---
-    window.onload = async () => {
-      await loadAllData();
-      renderClientSelect();
-      setupEventListeners();
-      showHome();
-      displayTodayDate();
-    };
-
-    function displayTodayDate() {
-      const today = dayjs();
-      document.getElementById('todayDate').textContent = today.format('YYYY年M月D日 (dd)');
-    }
-
-    function setupEventListeners() {
-      document.getElementById('clientSelect').addEventListener('change', (e) => {
-        currentClientId = e.target.value;
-        currentProjectId = null;
-        renderProjectSelect();
-        toggleGanttView(false);
-      });
-
-      document.getElementById('projectSelect').addEventListener('change', (e) => {
-        currentProjectId = e.target.value;
-        toggleGanttView(!!currentProjectId);
-        if (currentProjectId) renderGantt();
-      });
-
-      // Enter support for modals
-      const inputs = document.querySelectorAll('#inputModal input, #inputModal textarea');
-      inputs.forEach(input => {
-        input.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            submitModal();
-          }
-        });
-      });
-    }
-
-    function showHome() {
-      document.getElementById('homeView').classList.remove('hidden');
-      document.getElementById('mainArea').classList.add('hidden');
-      document.getElementById('navControls').classList.add('hidden');
-      renderRecentProjects();
-      renderTodayRecommendations();
-    }
-
-    function showGantt() {
-      document.getElementById('homeView').classList.add('hidden');
-      document.getElementById('mainArea').classList.remove('hidden');
-      document.getElementById('navControls').classList.remove('hidden');
-    }
-
-    // --- 5. 今日のタスクレコメンド ---
-    function renderTodayRecommendations() {
-      const today = dayjs();
-      const container = document.getElementById('recommendationsList');
-
-      const todayTasks = store.tasks.filter(t => {
-        const start = dayjs(t.start_date);
-        const end = dayjs(t.end_date);
-        return today.isBetween(start, end, 'day', '[]') && t.status !== 2;
-      });
-
-      if (todayTasks.length === 0) {
-        container.innerHTML = '<div class="text-gray-400 text-sm">今日のタスクはありません</div>';
-        return;
-      }
-
-      container.innerHTML = '';
-      todayTasks.slice(0, 5).forEach(task => {
-        const minor = store.minorCats.find(m => m.id === task.minor_id);
-        const major = minor ? store.majorCats.find(maj => maj.id === minor.major_id) : null;
-        const project = major ? store.projects.find(p => p.id === major.project_id) : null;
-
-        const card = document.createElement('div');
-        card.className = 'task-recommendation cursor-pointer';
-        card.onclick = () => {
-          if (project) loadProject(project.client_id, project.id);
-        };
-        card.innerHTML = `
-          <div class="flex justify-between items-start">
-            <div class="flex-1">
-              <div class="font-bold text-lg">${task.name}</div>
-              <div class="text-xs opacity-90 mt-1">
-                ${project ? project.name : ''} → ${major ? major.name : ''} → ${minor ? minor.name : ''}
-              </div>
-            </div>
-            <div class="text-xs opacity-75">
-              ${task.status === 0 ? '未着手' : '進行中'}
-            </div>
-          </div>
-        `;
-        container.appendChild(card);
-      });
-    }
-
-    // --- 6. 描画ロジック ---
-    function renderClientSelect() {
-      const select = document.getElementById('clientSelect');
-      select.innerHTML = '<option value="">クライアント選択...</option>';
-      store.clients.forEach(c => {
-        const op = document.createElement('option');
-        op.value = c.id;
-        op.innerText = c.name;
-        if (c.id === currentClientId) op.selected = true;
-        select.appendChild(op);
-      });
-    }
-
-    function renderProjectSelect() {
-      const select = document.getElementById('projectSelect');
-      const addBtn = document.getElementById('addProjectBtn');
-      select.innerHTML = '<option value="">案件を選択...</option>';
-
-      if (!currentClientId) {
-        select.disabled = true;
-        addBtn.classList.add('cursor-not-allowed', 'text-gray-400');
-        addBtn.disabled = true;
-        return;
-      }
-
-      select.disabled = false;
-      addBtn.classList.remove('cursor-not-allowed', 'text-gray-400');
-      addBtn.classList.add('text-indigo-600');
-      addBtn.disabled = false;
-
-      const projects = store.projects.filter(p => p.client_id === currentClientId);
-      projects.forEach(p => {
-        const op = document.createElement('option');
-        op.value = p.id;
-        op.innerText = p.name;
-        if (p.id === currentProjectId) op.selected = true;
-        select.appendChild(op);
-      });
-    }
-
-    function renderClientProjectList() {
-      const container = document.getElementById('clientProjectList');
-      const emptyState = document.getElementById('emptyState');
-
-      if (store.clients.length === 0) {
-        container.innerHTML = '';
-        emptyState.classList.remove('hidden');
-        emptyState.classList.add('flex');
-        return;
-      }
-
-      emptyState.classList.add('hidden');
-      emptyState.classList.remove('flex');
-
-      let html = '';
-
-      store.clients.forEach(client => {
-        const clientProjects = store.projects.filter(p => p.client_id === client.id);
-
-        html += `
-          <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-300 group">
-            <div class="p-5 border-b border-gray-50 bg-gray-50/50 flex justify-between items-center">
-              <h3 class="font-bold text-gray-800 truncate flex items-center">
-                <i class="fas fa-building text-gray-400 mr-2 text-sm"></i>
-                ${client.name}
-              </h3>
-              <span class="text-xs font-medium bg-white border border-gray-200 text-gray-500 px-2 py-1 rounded-full">
-                ${clientProjects.length} 案件
-              </span>
-            </div>
-            
-            <div class="p-2">
-              ${clientProjects.length > 0 ? `
-                <div class="space-y-1">
-                  ${clientProjects.map(project => {
-          // 進捗状況の簡易計算（完了タスク / 全タスク）
-          const pTasks = store.tasks.filter(t => {
-            const minor = store.minorCats.find(m => m.id === t.minor_id);
-            const major = minor ? store.majorCats.find(maj => maj.id === minor.major_id) : null;
-            return major && major.project_id === project.id;
-          });
-          const doneTasks = pTasks.filter(t => t.status === 2).length;
-          const progress = pTasks.length > 0 ? Math.round((doneTasks / pTasks.length) * 100) : 0;
-
-          return `
-                    <div onclick="loadProject('${project.id}')" 
-                         class="group/item flex items-center justify-between p-3 rounded-lg hover:bg-indigo-50 cursor-pointer transition-colors">
-                      <div class="flex-1 min-w-0 mr-3">
-                        <div class="font-medium text-gray-700 text-sm truncate group-hover/item:text-indigo-700 transition-colors">
-                          ${project.name}
-                        </div>
-                        <div class="flex items-center mt-1 space-x-3">
-                          <div class="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden">
-                            <div class="h-full bg-indigo-400 rounded-full" style="width: ${progress}%"></div>
-                          </div>
-                          <span class="text-[10px] text-gray-400 font-mono">${progress}%</span>
-                        </div>
-                      </div>
-                      <i class="fas fa-chevron-right text-gray-300 text-xs group-hover/item:text-indigo-400 transition-colors"></i>
-                    </div>
-                    `;
-        }).join('')}
-                </div>
-              ` : `
-                <div class="text-center py-6">
-                  <p class="text-xs text-gray-400 mb-3">案件がありません</p>
-                  <button onclick="currentClientId='${client.id}'; openModal('project')" 
-                          class="text-xs text-indigo-600 hover:text-indigo-800 font-medium hover:underline">
-                    + 案件を追加
-                  </button>
-                </div>
-              `}
-            </div>
-          </div>
-        `;
-      });
-
-      container.innerHTML = html;
-    }
-
-    function loadProject(cId, pId) {
-      currentClientId = cId;
-      currentProjectId = pId;
-      renderClientSelect();
-      renderProjectSelect();
-      showGantt();
-      toggleGanttView(true);
-      renderGantt();
-    }
-
-    function toggleGanttView(show) {
-      const empty = document.getElementById('emptyState');
-      const gantt = document.getElementById('ganttView');
-      const info = document.getElementById('projectInfoArea');
-
-      if (show) {
-        empty.classList.add('hidden');
-        gantt.classList.remove('hidden');
-        info.classList.remove('hidden');
-        updateProjectInfoArea();
-      } else {
-        empty.classList.remove('hidden');
-        gantt.classList.add('hidden');
-        info.classList.add('hidden');
-      }
-    }
-
-    function updateProjectInfoArea() {
-      const p = store.projects.find(x => x.id === currentProjectId);
-      if (!p) return;
-      document.getElementById('infoProjectName').innerText = p.name;
-      document.getElementById('infoOverview').innerText = p.overview || '案件の概要は未設定です。';
-      document.getElementById('infoStakeholders').innerText = p.stakeholders || '未設定';
-    }
-
-    async function openProjectInfoModal() {
-      const p = store.projects.find(x => x.id === currentProjectId);
-      if (!p) return;
-      document.getElementById('editProjectOverview').value = p.overview || '';
-      document.getElementById('editProjectStakeholders').value = p.stakeholders || '';
-
-      const m = document.getElementById('projectInfoModal');
-      m.classList.remove('hidden');
-      m.classList.add('flex');
-    }
-
-    async function saveProjectInfo() {
-      const p = store.projects.find(x => x.id === currentProjectId);
-      if (!p) return;
-
-      const overview = document.getElementById('editProjectOverview').value;
-      const stakeholders = document.getElementById('editProjectStakeholders').value;
-
-      try {
-        await updateProjectInfo(p.id, overview, stakeholders);
-        p.overview = overview;
-        p.stakeholders = stakeholders;
-        updateProjectInfoArea();
-      } catch (error) {
-        console.error('保存エラー:', error);
-        alert('保存に失敗しました');
-      }
-
-      document.getElementById('projectInfoModal').classList.add('hidden');
-      document.getElementById('projectInfoModal').classList.remove('flex');
-    }
-
-    // --- 7. ガントチャート描画 ---
-    function renderGantt() {
-      const container = document.getElementById('ganttView');
-      container.innerHTML = '';
-
-      const majors = store.majorCats.filter(m => m.project_id === currentProjectId);
-      const minorsMap = {};
-      majors.forEach(m => {
-        minorsMap[m.id] = store.minorCats.filter(mi => mi.major_id === m.id);
-      });
-
-      let allTasks = [];
-      Object.values(minorsMap).flat().forEach(mi => {
-        const tasks = store.tasks.filter(t => t.minor_id === mi.id);
-        allTasks = allTasks.concat(tasks);
-      });
-
-      let startDate, endDate;
-      if (allTasks.length > 0) {
-        const dates = allTasks.flatMap(t => [dayjs(t.start_date), dayjs(t.end_date)]);
-        const minDate = dates.reduce((a, b) => a.isBefore(b) ? a : b);
-        const maxDate = dates.reduce((a, b) => a.isAfter(b) ? a : b);
-        startDate = minDate.subtract(1, 'week');
-        endDate = maxDate.add(1, 'week');
-      } else {
-        startDate = dayjs().subtract(1, 'week');
-        endDate = dayjs().add(2, 'weeks');
-      }
-
-      const totalDays = endDate.diff(startDate, 'day') + 1;
-
-      // Corner
-      const corner = document.createElement('div');
-      corner.className = 'sticky-corner p-2 flex items-center justify-between font-bold text-sm text-gray-600 h-12';
-      corner.innerHTML = `
-        <span>工程一覧</span>
-        <button onclick="openModal('major')" class="text-indigo-600 hover:bg-indigo-100 p-1 rounded"><i class="fas fa-plus"></i></button>
-      `;
-      container.appendChild(corner);
-
-      // Date header
-      const dateHeader = document.createElement('div');
-      dateHeader.className = 'sticky-header flex';
-      dateHeader.style.width = `${totalDays * CELL_WIDTH}px`;
-
-      for (let i = 0; i < totalDays; i++) {
-        const d = startDate.add(i, 'day');
-        const cell = document.createElement('div');
-        cell.style.width = `${CELL_WIDTH}px`;
-        cell.className = `flex-shrink-0 text-center text-xs border-r border-gray-200 flex flex-col justify-center items-center h-12 ${getDateColorClass(d)}`;
-
-        const showMonth = (i === 0 || d.date() === 1);
-        const monthText = showMonth ? d.format('M月') : '&nbsp;';
-        const monthClass = showMonth ? 'text-indigo-600' : 'invisible';
-
-        cell.innerHTML = `
-          <div class="text-[10px] ${monthClass} font-bold leading-none mb-0.5">${monthText}</div>
-          <div class="font-bold leading-none">${d.format('D')}</div>
-          <div class="text-[10px] text-gray-500 leading-none mt-0.5">${d.format('dd')}</div>
-        `;
-        dateHeader.appendChild(cell);
-      }
-      container.appendChild(dateHeader);
-
-      // Body
-      majors.forEach(major => {
-        const minors = minorsMap[major.id];
-
-        const majorRowLeft = document.createElement('div');
-        majorRowLeft.className = 'sticky-col bg-gray-100 border-b border-gray-300 p-2 font-bold text-gray-700 flex justify-between items-center h-12 cursor-move';
-        majorRowLeft.innerText = major.name;
-        majorRowLeft.innerHTML += `<button onclick="openModal('minor', '${major.id}')" class="text-xs bg-white border px-1 rounded text-gray-500 hover:text-indigo-600 ml-2"><i class="fas fa-plus"></i> 小分類</button>`;
-
-        majorRowLeft.draggable = true;
-        majorRowLeft.ondragstart = (e) => handleRowDragStart(e, 'major', major.id);
-        majorRowLeft.ondragover = (e) => e.preventDefault();
-        majorRowLeft.ondrop = (e) => handleRowDrop(e, 'major', major.id);
-
-        container.appendChild(majorRowLeft);
-
-        const majorRowRight = document.createElement('div');
-        majorRowRight.className = 'border-b border-gray-300 bg-gray-100 h-12';
-        container.appendChild(majorRowRight);
-
-        minors.forEach(minor => {
-          const minorLeft = document.createElement('div');
-          minorLeft.className = 'sticky-col border-b border-gray-200 p-2 pl-6 text-sm flex items-center justify-between h-12 cursor-move';
-          minorLeft.innerHTML = `<span>${minor.name}</span> <i class="fas fa-chevron-right text-gray-300 text-xs"></i>`;
-
-          minorLeft.draggable = true;
-          minorLeft.ondragstart = (e) => handleRowDragStart(e, 'minor', minor.id);
-          minorLeft.ondragover = (e) => e.preventDefault();
-          minorLeft.ondrop = (e) => handleRowDrop(e, 'minor', minor.id);
-
-          container.appendChild(minorLeft);
-
-          const rowRight = document.createElement('div');
-          rowRight.className = 'relative flex h-12 border-b border-gray-200';
-          rowRight.style.width = `${totalDays * CELL_WIDTH}px`;
-
-          for (let i = 0; i < totalDays; i++) {
-            const d = startDate.add(i, 'day');
-            const cell = document.createElement('div');
-            cell.style.width = `${CELL_WIDTH}px`;
-            cell.className = `flex-shrink-0 h-full border-r border-gray-100 ${getDateColorClass(d)} hover:bg-indigo-50 transition-colors cursor-pointer`;
-            cell.onclick = () => openTaskModal(null, minor.id, d.format('YYYY-MM-DD'));
-            rowRight.appendChild(cell);
-          }
-
-          const tasks = store.tasks.filter(t => t.minor_id === minor.id);
-          tasks.forEach(task => {
-            const tStart = dayjs(task.start_date);
-            const tEnd = dayjs(task.end_date);
-
-            if (tEnd.isBefore(startDate) || tStart.isAfter(endDate)) return;
-
-            const diffDays = tStart.diff(startDate, 'day');
-            const duration = tEnd.diff(tStart, 'day') + 1;
-
-            const leftPos = diffDays * CELL_WIDTH;
-            const widthPos = duration * CELL_WIDTH;
-
-            let bgClass = 'bg-gray-400';
-            if (task.status == 1) bgClass = 'bg-blue-500';
-            if (task.status == 2) bgClass = 'bg-green-500';
-
-            const taskBar = document.createElement('div');
-            taskBar.className = `absolute top-2 h-8 rounded shadow task-bar ${bgClass} text-white text-xs flex items-center px-2 overflow-hidden whitespace-nowrap group`;
-            taskBar.style.left = `${leftPos}px`;
-            taskBar.style.width = `${widthPos - 2}px`;
-            taskBar.dataset.taskId = task.id;
-
-            taskBar.innerHTML = `
-              <div class="resize-handle resize-handle-left opacity-0 group-hover:opacity-100 bg-white/30" data-direction="left"></div>
-              <span class="pointer-events-none select-none flex-1 text-center">${task.name}</span>
-              <div class="resize-handle resize-handle-right opacity-0 group-hover:opacity-100 bg-white/30" data-direction="right"></div>
-            `;
-            if (task.memo) taskBar.title = task.memo;
-
-            // リサイズハンドルのイベント
-            const leftHandle = taskBar.querySelector('[data-direction="left"]');
-            const rightHandle = taskBar.querySelector('[data-direction="right"]');
-
-            leftHandle.addEventListener('mousedown', (e) => startResize(e, task.id, 'left', startDate));
-            rightHandle.addEventListener('mousedown', (e) => startResize(e, task.id, 'right', startDate));
-
-            // タスクバー本体のドラッグ（リサイズハンドル以外）
-            taskBar.addEventListener('mousedown', (e) => {
-              if (e.target.classList.contains('resize-handle')) return;
-              if (e.detail === 2) { // ダブルクリック
-                openTaskModal(task);
-              } else {
-                startTaskDrag(e, task, startDate, minor.id);
-              }
-            });
-
-            rowRight.appendChild(taskBar);
-          });
-
-          container.appendChild(rowRight);
-        });
-      });
-    }
-
-    function getDateColorClass(d) {
-      const day = d.day();
-      const isHoliday = (d.month() === 0 && d.date() === 1) || (d.month() === 4 && d.date() === 3);
-
-      if (isHoliday) return 'bg-red-100';
-      if (day === 0) return 'is-weekend';
-      if (day === 6) return 'is-saturday';
-      return 'bg-white';
-    }
-
-    // --- 8. タスクリサイズ（修正版） ---
-    function startResize(e, taskId, direction, ganttStartDate) {
-      e.stopPropagation();
-      e.preventDefault();
-
-      const task = store.tasks.find(t => t.id === taskId);
-      if (!task) return;
-
-      const startX = e.clientX;
-      const originalStart = dayjs(task.start_date);
-      const originalEnd = dayjs(task.end_date);
-
-      const onMouseMove = (moveEvent) => {
-        const diffX = moveEvent.clientX - startX;
-        const diffDays = Math.round(diffX / CELL_WIDTH);
-
-        if (diffDays === 0) return;
-
-        if (direction === 'left') {
-          const newStart = originalStart.add(diffDays, 'day');
-          if (newStart.isAfter(originalEnd)) return;
-          task.start_date = newStart.format('YYYY-MM-DD');
-        } else {
-          const newEnd = originalEnd.add(diffDays, 'day');
-          if (newEnd.isBefore(originalStart)) return;
-          task.end_date = newEnd.format('YYYY-MM-DD');
-        }
-        renderGantt();
-      };
-
-      const onMouseUp = async () => {
-        window.removeEventListener('mousemove', onMouseMove);
-        window.removeEventListener('mouseup', onMouseUp);
-        await updateTask(task.id, { startDate: task.start_date, endDate: task.end_date });
-        await loadAllData();
-      };
-
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', onMouseUp);
-    }
-
-    // --- 9. タスクドラッグ移動（修正版） ---
-    function startTaskDrag(e, task, ganttStartDate, currentMinorId) {
-      e.stopPropagation();
-
-      const startX = e.clientX;
-      const startY = e.clientY;
-      let hasMoved = false;
-
-      const taskBar = e.currentTarget;
-      const originalLeft = parseInt(taskBar.style.left);
-
-      const onMouseMove = (moveEvent) => {
-        const diffX = moveEvent.clientX - startX;
-        const diffY = moveEvent.clientY - startY;
-
-        if (Math.abs(diffX) > 5 || Math.abs(diffY) > 5) {
-          hasMoved = true;
-        }
-
-        if (hasMoved) {
-          const daysOffset = Math.round(diffX / CELL_WIDTH);
-          const duration = dayjs(task.end_date).diff(dayjs(task.start_date), 'day');
-          const newStart = dayjs(task.start_date).add(daysOffset, 'day');
-
-          task.start_date = newStart.format('YYYY-MM-DD');
-          task.end_date = newStart.add(duration, 'day').format('YYYY-MM-DD');
-
-          renderGantt();
-        }
-      };
-
-      const onMouseUp = async (upEvent) => {
-        window.removeEventListener('mousemove', onMouseMove);
-        window.removeEventListener('mouseup', onMouseUp);
-
-        if (!hasMoved) return; // クリックのみの場合は何もしない
-
-        await updateTask(task.id, {
-          startDate: task.start_date,
-          endDate: task.end_date,
-          minorId: currentMinorId
-        });
-        await loadAllData();
-      };
-
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', onMouseUp);
-    }
-
-    // --- 10. 行のドラッグ＆ドロップ ---
-    function handleRowDragStart(e, type, id) {
-      e.dataTransfer.setData('type', type);
-      e.dataTransfer.setData('dragId', id);
-      e.stopPropagation();
-    }
-
-    function handleRowDrop(e, type, targetId) {
-      e.preventDefault();
-      e.stopPropagation();
-      // 省略（既存コードと同様）
-    }
-
-    function handleMinorDropOnMajor(e, targetMajorId) {
-      e.preventDefault();
-      e.stopPropagation();
-      // 省略（既存コードと同様）
-    }
-
-    // --- 11. モーダル制御 ---
-    let editingTaskId = null;
-
-    function openModal(type, parentId = null) {
-      editingTaskId = null;
-      document.getElementById('inputModal').classList.remove('hidden');
-      document.getElementById('inputModal').classList.add('flex');
-
-      document.getElementById('modalType').value = type;
-      document.getElementById('modalParentId').value = parentId || '';
-
-      document.getElementById('modalNameInput').value = '';
-      document.getElementById('taskFields').classList.add('hidden');
-
-      let title = '';
-      if (type === 'client') title = 'クライアント追加';
-      if (type === 'project') title = '案件追加';
-      if (type === 'major') title = '大分類 (工程) 追加';
-      if (type === 'minor') title = '小分類 追加';
-
-      document.getElementById('modalTitle').innerText = title;
-
-      // プロジェクトモーダルをホーム画面から開いた場合、クライアント選択可能に
-      if (type === 'project' && !currentClientId) {
-        const clientSelectHTML = `
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">クライアント選択</label>
-            <select id="modalClientSelect" class="w-full border rounded p-2">
-              ${store.clients.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
-            </select>
-          </div>
-        `;
-        const nameInput = document.getElementById('modalNameInput').parentElement;
-        nameInput.insertAdjacentHTML('beforebegin', clientSelectHTML);
-      }
-    }
-
-    function openTaskModal(task, minorId = null, dateStr = null) {
-      document.getElementById('inputModal').classList.remove('hidden');
-      document.getElementById('inputModal').classList.add('flex');
-      document.getElementById('modalType').value = 'task';
-      document.getElementById('taskFields').classList.remove('hidden');
-
-      if (task) {
-        editingTaskId = task.id;
-        document.getElementById('modalTitle').innerText = 'タスク編集';
-        document.getElementById('modalNameInput').value = task.name;
-        document.getElementById('modalStartDate').value = task.start_date;
-        document.getElementById('modalEndDate').value = task.end_date;
-
-        const radios = document.getElementsByName('modalStatus');
-        radios.forEach(r => {
-          if (r.value == task.status) r.checked = true;
-        });
-
-        document.getElementById('modalMemo').value = task.memo || '';
-        document.getElementById('modalParentId').value = task.minor_id;
-      } else {
-        editingTaskId = null;
-        document.getElementById('modalTitle').innerText = 'タスク追加';
-        document.getElementById('modalNameInput').value = '';
-        document.getElementById('modalStartDate').value = dateStr;
-        document.getElementById('modalEndDate').value = dayjs(dateStr).add(1, 'day').format('YYYY-MM-DD');
-        document.getElementsByName('modalStatus')[0].checked = true;
-        document.getElementById('modalMemo').value = '';
-        document.getElementById('modalParentId').value = minorId;
-      }
-    }
-
-    function closeModal() {
-      document.getElementById('inputModal').classList.add('hidden');
-      document.getElementById('inputModal').classList.remove('flex');
-
-      const clientSelect = document.getElementById('modalClientSelect');
-      if (clientSelect) clientSelect.parentElement.remove();
-    }
-
-    async function submitModal() {
-      const type = document.getElementById('modalType').value;
-      const name = document.getElementById('modalNameInput').value;
-      let parentId = document.getElementById('modalParentId').value;
-
-      if (!name) { alert('名称を入力してください'); return; }
-
-      try {
-        if (type === 'client') {
-          await saveClient(name);
-        } else if (type === 'project') {
-          const clientSelect = document.getElementById('modalClientSelect');
-          const clientId = clientSelect ? clientSelect.value : currentClientId;
-          if (!clientId) { alert('クライアントを選択してください'); return; }
-          await saveProject(clientId, name);
-        } else if (type === 'major') {
-          await saveMajorCat(currentProjectId, name);
-        } else if (type === 'minor') {
-          await saveMinorCat(parentId, name);
-        } else if (type === 'task') {
-          const sDate = document.getElementById('modalStartDate').value;
-          const eDate = document.getElementById('modalEndDate').value;
-
-          let status = 0;
-          document.getElementsByName('modalStatus').forEach(r => {
-            if (r.checked) status = parseInt(r.value);
-          });
-
-          const memo = document.getElementById('modalMemo').value;
-
-          if (dayjs(eDate).isBefore(dayjs(sDate))) {
-            alert('終了日は開始日より後にして下さい');
-            return;
-          }
-
-          if (editingTaskId) {
-            await updateTask(editingTaskId, {
-              name,
-              startDate: sDate,
-              endDate: eDate,
-              status,
-              memo
-            });
-          } else {
-            await saveTask({
-              minorId: parentId,
-              name,
-              startDate: sDate,
-              endDate: eDate,
-              status,
-              memo
-            });
-          }
-        }
-
-        await loadAllData();
-        closeModal();
-      } catch (error) {
-        console.error('保存エラー:', error);
-        alert('保存に失敗しました');
-      }
-    }
-
-    function renderApp() {
-      if (currentClientId) renderClientSelect();
-      if (currentProjectId) {
-        renderProjectSelect();
-        renderGantt();
-      }
-    }
-
-    // --- 12. AIチャット機能 ---
-    let chatHistory = [];
-    let pendingChatMessage = null;
-
-    function toggleChat() {
-      const fab = document.getElementById('chatFAB');
-      const window = document.getElementById('chatWindow');
-
-      if (window.classList.contains('hidden')) {
-        window.classList.remove('hidden');
-        fab.classList.add('hidden');
-      } else {
-        window.classList.add('hidden');
-        fab.classList.remove('hidden');
-      }
-    }
-
-    function changeApiKey() {
-      GEMINI_API_KEY = '';
-      localStorage.removeItem('gemini_api_key');
-      openApiKeyModal();
-    }
-
-    function openApiKeyModal() {
-      const modal = document.getElementById('apiKeyModal');
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-      document.getElementById('geminiApiKeyInput').value = GEMINI_API_KEY || '';
-    }
-
-    function closeApiKeyModal() {
-      const modal = document.getElementById('apiKeyModal');
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
-    }
-
-    function saveApiKey() {
-      const key = document.getElementById('geminiApiKeyInput').value.trim();
-      if (!key) {
-        alert('APIキーを入力してください');
-        return;
-      }
-      GEMINI_API_KEY = key;
-      localStorage.setItem('gemini_api_key', key);
-      closeApiKeyModal();
-
-      // モーダルを開く前に保留していたメッセージがあれば送信
-      if (pendingChatMessage) {
-        const msg = pendingChatMessage;
-        pendingChatMessage = null;
-        document.getElementById('chatInput').value = msg;
-        sendChatMessage();
-      }
-    }
-
-    async function sendChatMessage() {
-      const input = document.getElementById('chatInput');
-      const message = input.value.trim();
-      if (!message) return;
-
-      if (!GEMINI_API_KEY) {
-        pendingChatMessage = message;
-        input.value = '';
-        openApiKeyModal();
-        return;
-      }
-
-      const messagesDiv = document.getElementById('chatMessages');
-
-      // ユーザーメッセージ表示
-      appendChatMessage('user', message);
-      input.value = '';
-
-      // ローディング表示
-      const loadingId = appendChatMessage('assistant', 'thinking...');
-
-      try {
-        // プロジェクトデータをコンテキストとして準備
-        const context = {
-          clients: store.clients.length,
-          projects: store.projects.map(p => ({
-            name: p.name,
-            tasks: store.tasks.filter(t => {
-              const minor = store.minorCats.find(m => m.id === t.minor_id);
-              const major = minor ? store.majorCats.find(maj => maj.id === minor.major_id) : null;
-              return major && major.project_id === p.id;
-            }).length
-          })),
-          todayTasks: store.tasks.filter(t => {
-            const today = dayjs();
-            return today.isBetween(dayjs(t.start_date), dayjs(t.end_date), 'day', '[]') && t.status !== 2;
-          }).map(t => ({
-            name: t.name,
-            status: t.status === 0 ? '未着手' : '進行中',
-            dueDate: t.end_date
-          }))
-        };
-
-        // Gemini API v1beta - Verified working model
-        // Using URL parameter for API key to avoid CORS/header issues in browser
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
-
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{
-                text: `あなたはプロジェクト管理アシスタントです。以下のデータに基づいて質問に答えてください。
-
-【現在のプロジェクトデータ】
-${JSON.stringify(context, null, 2)}
-
-【ユーザーの質問】
-${message}
-
-日本語で簡潔に回答してください。`
-              }]
-            }]
-          })
-        });
-
-        if (!response.ok) {
-          const errorData = await response.text();
-          console.error('API Error Details:', errorData);
-          throw new Error(`API Error: ${response.status} - ${errorData}`);
-        }
-
-        const data = await response.json();
-
-        if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-          throw new Error('Invalid API response structure');
-        }
-
-        const reply = data.candidates[0].content.parts[0].text;
-
-        // ローディングを実際の返信に置き換え
-        document.getElementById(loadingId).innerHTML = marked(reply);
-
-      } catch (error) {
-        console.error('AI Error:', error);
-        let errorMsg = '❌ エラーが発生しました。';
-
-        if (error.message.includes('404')) {
-          errorMsg += '<br>APIキーが無効です。正しいキーを入力してください。';
-        } else if (error.message.includes('API Error')) {
-          errorMsg += `<br>${error.message}`;
-        } else {
-          errorMsg += '<br>ネットワーク接続を確認してください。';
-        }
-
-        document.getElementById(loadingId).innerHTML = errorMsg;
-      }
-    }
-
-    function appendChatMessage(role, content) {
-      const messagesDiv = document.getElementById('chatMessages');
-      const id = 'msg-' + Date.now();
-
-      const msgDiv = document.createElement('div');
-      msgDiv.id = id;
-      msgDiv.className = role === 'user'
-        ? 'mb-3 flex justify-end'
-        : 'mb-3 flex justify-start';
-
-      msgDiv.innerHTML = role === 'user'
-        ? `<div class="bg-indigo-600 text-white px-4 py-2 rounded-lg max-w-xs">${content}</div>`
-        : `<div class="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg max-w-xs">${content}</div>`;
-
-      messagesDiv.appendChild(msgDiv);
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
-
-      return id;
-    }
-
-    // Marked.js alternative (simple markdown)
-    function marked(text) {
-      return text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/\n/g, '<br>');
-      // --- グローバル公開 ---
-      window.openModal = openModal;
-      window.closeModal = closeModal;
-      window.submitModal = submitModal;
-      window.resetData = resetData;
-      window.showHome = showHome;
-      window.loadProject = loadProject;
-      window.openTaskModal = openTaskModal;
-      window.openProjectInfoModal = openProjectInfoModal;
-      window.saveProjectInfo = saveProjectInfo;
-      window.toggleChat = toggleChat;
-      window.sendChatMessage = sendChatMessage;
-      window.openApiKeyModal = openApiKeyModal;
-      window.closeApiKeyModal = closeApiKeyModal;
-      window.saveApiKey = saveApiKey;
-      window.changeApiKey = changeApiKey;
-      window.renderClientProjectList = renderClientProjectList;
-      window.handleMinorDropOnMajor = handleMinorDropOnMajor;
-    }
-  </script>
+  <!-- 地域ニュースモーダル -->
+  <div id="localNewsModal"
+    class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 backdrop-blur-sm">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[80vh]">
+      <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+        <h3 class="font-bold text-lg text-gray-800 flex items-center">
+          <i class="fas fa-newspaper text-indigo-600 mr-2"></i> 最新ニュース
+        </h3>
+        <button
+          onclick="document.getElementById('localNewsModal').classList.add('hidden');document.getElementById('localNewsModal').classList.remove('flex')"
+          class="text-gray-400 hover:text-gray-600 transition-colors">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+      <div id="localNewsList" class="p-4 overflow-y-auto flex-1">
+        <!-- ニュースリスト -->
+      </div>
+      <div class="p-3 border-t border-gray-100 bg-gray-50 rounded-b-xl text-center">
+        <button
+          onclick="document.getElementById('localNewsModal').classList.add('hidden');document.getElementById('localNewsModal').classList.remove('flex')"
+          class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 
 </html>
