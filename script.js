@@ -745,6 +745,56 @@ window.scrollToToday = scrollToToday;
 // --- 7. ガントチャート描画 ---
 let ganttStartDate; // グローバル変数
 
+// タスクの期間が重なっているかチェック
+function tasksOverlap(task1, task2) {
+  const start1 = dayjs(task1.start_date);
+  const end1 = dayjs(task1.end_date);
+  const start2 = dayjs(task2.start_date);
+  const end2 = dayjs(task2.end_date);
+
+  // 重なっている条件: task1の開始がtask2の終了より前 AND task1の終了がtask2の開始より後
+  return start1.isSameOrBefore(end2, 'day') && end1.isSameOrAfter(start2, 'day');
+}
+
+// タスクを複数のレーンに配置（重ならないように）
+function assignTasksToLanes(tasks) {
+  if (tasks.length === 0) return { taskLanes: new Map(), laneCount: 1 };
+
+  // タスクを開始日でソート
+  const sortedTasks = [...tasks].sort((a, b) =>
+    dayjs(a.start_date).diff(dayjs(b.start_date))
+  );
+
+  const taskLanes = new Map(); // taskId -> laneIndex
+  const lanes = []; // 各レーンの最後のタスクの終了日
+
+  sortedTasks.forEach(task => {
+    const taskStart = dayjs(task.start_date);
+
+    // このタスクを配置できるレーンを探す
+    let assignedLane = -1;
+    for (let i = 0; i < lanes.length; i++) {
+      // レーンの最後のタスクの終了日より後に開始するなら配置可能
+      if (taskStart.isAfter(lanes[i], 'day')) {
+        assignedLane = i;
+        break;
+      }
+    }
+
+    // 配置できるレーンがなければ新しいレーンを作成
+    if (assignedLane === -1) {
+      assignedLane = lanes.length;
+      lanes.push(dayjs(task.end_date));
+    } else {
+      lanes[assignedLane] = dayjs(task.end_date);
+    }
+
+    taskLanes.set(task.id, assignedLane);
+  });
+
+  return { taskLanes, laneCount: lanes.length };
+}
+
 function renderGantt() {
   const container = document.getElementById('ganttView');
   if (!container) return;
@@ -846,9 +896,17 @@ function renderGantt() {
     container.appendChild(majorRowRight);
 
     minors.forEach(minor => {
+      const tasks = store.tasks.filter(t => String(t.minor_id) === String(minor.id));
+
+      // タスクをレーンに配置して、必要なレーン数を取得
+      const { taskLanes, laneCount } = assignTasksToLanes(tasks);
+
+      // レーン数に応じて行の高さを計算
+      const rowHeight = CELL_HEIGHT * laneCount;
+
       const minorLeft = document.createElement('div');
       minorLeft.className = 'sticky-col border-b border-gray-200 p-2 pl-6 text-sm flex items-center justify-between cursor-move bg-white text-gray-600';
-      minorLeft.style.height = `${CELL_HEIGHT}px`;
+      minorLeft.style.height = `${rowHeight}px`;
       minorLeft.innerHTML = `
         <div class="flex-1 cursor-pointer hover:text-indigo-600 flex items-center group/edit" onclick="openMinorEditModal('${minor.id}')">
           <span>${minor.name}</span>
@@ -866,7 +924,7 @@ function renderGantt() {
 
       const rowRight = document.createElement('div');
       rowRight.className = 'relative flex border-b border-gray-200';
-      rowRight.style.height = `${CELL_HEIGHT}px`;
+      rowRight.style.height = `${rowHeight}px`;
       rowRight.style.width = `${totalDays * CELL_WIDTH}px`;
 
       for (let i = 0; i < totalDays; i++) {
@@ -877,8 +935,6 @@ function renderGantt() {
         cell.onclick = () => openTaskModal(null, minor.id, d.format('YYYY-MM-DD'));
         rowRight.appendChild(cell);
       }
-
-      const tasks = store.tasks.filter(t => String(t.minor_id) === String(minor.id));
 
       tasks.forEach(task => {
         const tStart = dayjs(task.start_date);
@@ -896,8 +952,10 @@ function renderGantt() {
         if (task.status == 1) bgClass = 'bg-blue-500';
         if (task.status == 2) bgClass = 'bg-green-500';
 
+        // 各レーンのタスク高さとマージン
         const taskHeight = Math.floor(CELL_HEIGHT * 0.65);
-        const taskTop = Math.floor((CELL_HEIGHT - taskHeight) / 2);
+        const laneIndex = taskLanes.get(task.id) || 0;
+        const taskTop = Math.floor((CELL_HEIGHT - taskHeight) / 2) + (laneIndex * CELL_HEIGHT);
 
         const taskBar = document.createElement('div');
         taskBar.className = `absolute rounded shadow task-bar ${bgClass} text-white text-xs flex items-center px-2 overflow-hidden whitespace-nowrap group`;
