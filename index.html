@@ -236,81 +236,6 @@
     </div>
   </main>
 
-  <!-- AIチャット機能 -->
-  <div id="chatFAB" class="chat-fab" onclick="toggleChat()">
-    <i class="fas fa-robot"></i>
-  </div>
-
-  <div id="chatWindow" class="chat-window hidden">
-    <div class="bg-indigo-600 text-white p-4 rounded-t-2xl flex justify-between items-center shadow-md">
-      <div class="flex items-center">
-        <i class="fas fa-robot mr-2 text-xl"></i>
-        <span class="font-bold text-lg tracking-wide">AI アシスタント</span>
-      </div>
-      <div class="flex items-center space-x-2">
-        <button onclick="changeApiKey()" class="text-white/80 hover:text-white transition-colors p-1" title="APIキー設定">
-          <i class="fas fa-cog"></i>
-        </button>
-        <button onclick="toggleChat()" class="text-white/80 hover:text-white transition-colors p-1">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-    </div>
-
-    <div class="chat-messages" id="chatMessages">
-      <div class="text-center text-gray-400 text-sm py-8">
-        <i class="fas fa-comments text-4xl mb-2"></i>
-        <p>プロジェクトの進捗について質問してください</p>
-      </div>
-    </div>
-
-    <div class="p-4 border-t">
-      <div class="flex gap-2">
-        <input type="text" id="chatInput" placeholder="質問を入力..."
-          class="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
-        <button onclick="sendChatMessage()"
-          class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
-          <i class="fas fa-paper-plane"></i>
-        </button>
-      </div>
-      <div class="text-xs text-gray-400 mt-2">
-        例: 「今週締め切りのタスクは？」「プロジェクトAの進捗は？」
-      </div>
-    </div>
-  </div>
-
-  <!-- Gemini APIキー入力モーダル -->
-  <div id="apiKeyModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
-    <div class="bg-white rounded-xl shadow-2xl w-[500px] p-6 transform transition-all scale-100">
-      <h3 class="text-xl font-bold mb-4 text-gray-800">
-        <i class="fas fa-key text-indigo-600 mr-2"></i>Gemini API キー設定
-      </h3>
-      <p class="text-sm text-gray-600 mb-4">
-        AIチャット機能を使用するには、Google Gemini API キーが必要です。<br>
-        <strong>完全無料</strong>で取得できます！
-      </p>
-
-      <div class="bg-indigo-50 border-l-4 border-indigo-600 p-4 mb-4 text-sm">
-        <p class="font-bold text-indigo-800 mb-2">📝 APIキー取得方法（2分で完了）</p>
-        <ol class="list-decimal list-inside space-y-1 text-indigo-900">
-          <li><a href="https://aistudio.google.com/app/apikey" target="_blank"
-              class="underline hover:text-indigo-600">Google AI Studio</a> にアクセス</li>
-          <li>Googleアカウントでログイン</li>
-          <li>「APIキーを取得」ボタンをクリック</li>
-          <li>生成されたキーをコピー</li>
-          <li>下の入力欄に貼り付け</li>
-        </ol>
-      </div>
-
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 mb-1">APIキー</label>
-        <button onclick="saveApiKey()"
-          class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-md transition-colors">
-          <i class="fas fa-save mr-2"></i>保存して使用
-        </button>
-      </div>
-    </div>
-  </div>
 
   <!-- プロジェクト情報編集モーダル -->
   </div>
@@ -437,13 +362,6 @@
       </div>
     </div>
   </div>
-
-  <!-- チャットボットボタン（右下固定） -->
-  <button id="chatbot-trigger"
-    class="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg hover:shadow-xl hover:scale-110 transition-all z-50 mouse-glow flex items-center justify-center"
-    style="display: none;" onclick="alert('Chatbot機能は準備中です')">
-    <i class="fas fa-robot text-xl"></i>
-  </button>
 
   <script src="script.js"></script>
 </body>
