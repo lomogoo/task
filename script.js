@@ -15,7 +15,8 @@ let store = {
   projects: [],
   majorCats: [],
   minorCats: [],
-  tasks: []
+  tasks: [],
+  todos: []
 };
 
 let currentClientId = null;
@@ -24,12 +25,13 @@ let currentProjectId = null;
 // --- 3. Supabase CRUD操作 ---
 async function loadAllData() {
   try {
-    const [clients, projects, majors, minors, tasks] = await Promise.all([
+    const [clients, projects, majors, minors, tasks, todos] = await Promise.all([
       supabaseClient.from('clients').select('*').order('created_at'),
       supabaseClient.from('projects').select('*').order('created_at'),
       supabaseClient.from('major_cats').select('*').order('sort_order'),
       supabaseClient.from('minor_cats').select('*').order('sort_order'),
-      supabaseClient.from('tasks').select('*').order('created_at')
+      supabaseClient.from('tasks').select('*').order('created_at'),
+      supabaseClient.from('todos').select('*').order('sort_order')
     ]);
 
     store.clients = clients.data || [];
@@ -37,6 +39,7 @@ async function loadAllData() {
     store.majorCats = majors.data || [];
     store.minorCats = minors.data || [];
     store.tasks = tasks.data || [];
+    store.todos = todos.data || [];
 
     renderApp();
   } catch (error) {
@@ -118,6 +121,39 @@ async function updateMinorCat(id, name, sortOrder) {
 async function updateProjectInfo(id, overview, stakeholders) {
   const { error } = await supabaseClient.from('projects')
     .update({ overview, stakeholders }).eq('id', id);
+  if (error) throw error;
+}
+
+// --- TODO CRUD操作 ---
+async function saveTodo(projectId, content) {
+  const maxOrder = store.todos
+    .filter(t => t.project_id === projectId)
+    .reduce((max, t) => Math.max(max, t.sort_order || 0), 0);
+
+  const { data, error } = await supabaseClient.from('todos')
+    .insert({
+      project_id: projectId,
+      content,
+      completed: false,
+      sort_order: maxOrder + 1000
+    }).select();
+  if (error) throw error;
+  return data[0];
+}
+
+async function updateTodo(id, updates) {
+  const dbUpdates = {};
+  if (updates.content !== undefined) dbUpdates.content = updates.content;
+  if (updates.completed !== undefined) dbUpdates.completed = updates.completed;
+  if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
+  dbUpdates.updated_at = new Date().toISOString();
+
+  const { error } = await supabaseClient.from('todos').update(dbUpdates).eq('id', id);
+  if (error) throw error;
+}
+
+async function deleteTodo(id) {
+  const { error } = await supabaseClient.from('todos').delete().eq('id', id);
   if (error) throw error;
 }
 
@@ -317,6 +353,7 @@ function updateDashboard() {
   fetchWeather();
   fetchNews();
   renderUpcomingTasks();
+  renderAllTodosList();
 
   // 時計は1分ごとに更新
   if (window.clockInterval) clearInterval(window.clockInterval);
@@ -1002,6 +1039,9 @@ function renderGantt() {
 
   // 依存関係の矢印を描画
   renderDependencies(container);
+
+  // TODOバッジを更新
+  updateTodoBadge();
 }
 
 // 依存関係の矢印描画
@@ -1757,6 +1797,161 @@ function showDeadlineToast(count) {
   }, 10000);
 }
 
+// --- TODO管理機能 ---
+let isTodoSidebarOpen = false;
+
+function toggleTodoSidebar() {
+  const sidebar = document.getElementById('todoSidebar');
+  const gantt = document.getElementById('ganttView');
+
+  isTodoSidebarOpen = !isTodoSidebarOpen;
+
+  if (isTodoSidebarOpen) {
+    sidebar.classList.remove('hidden');
+    if (gantt) gantt.style.marginRight = '33.333%';
+    renderTodoList();
+  } else {
+    sidebar.classList.add('hidden');
+    if (gantt) gantt.style.marginRight = '0';
+  }
+}
+
+async function addTodo() {
+  const input = document.getElementById('todoInput');
+  const content = input.value.trim();
+
+  if (!content) return;
+  if (!currentProjectId) {
+    alert('プロジェクトを選択してください');
+    return;
+  }
+
+  try {
+    await saveTodo(currentProjectId, content);
+    await loadAllData();
+    renderTodoList();
+    updateTodoBadge();
+    input.value = '';
+  } catch (error) {
+    console.error('TODO追加エラー:', error);
+    alert('TODOの追加に失敗しました');
+  }
+}
+
+async function toggleTodoComplete(todoId) {
+  const todo = store.todos.find(t => t.id === todoId);
+  if (!todo) return;
+
+  try {
+    await updateTodo(todoId, { completed: !todo.completed });
+    await loadAllData();
+    renderTodoList();
+    updateTodoBadge();
+    renderAllTodosList();
+  } catch (error) {
+    console.error('TODO更新エラー:', error);
+    alert('TODOの更新に失敗しました');
+  }
+}
+
+async function removeTodo(todoId) {
+  if (!confirm('このTODOを削除しますか？')) return;
+
+  try {
+    await deleteTodo(todoId);
+    await loadAllData();
+    renderTodoList();
+    updateTodoBadge();
+    renderAllTodosList();
+  } catch (error) {
+    console.error('TODO削除エラー:', error);
+    alert('TODOの削除に失敗しました');
+  }
+}
+
+function renderTodoList() {
+  const list = document.getElementById('todoList');
+  if (!list || !currentProjectId) return;
+
+  const projectTodos = store.todos.filter(t => t.project_id === currentProjectId);
+
+  if (projectTodos.length === 0) {
+    list.innerHTML = '<div class="text-center py-8 text-gray-400 text-sm">TODOがありません</div>';
+    return;
+  }
+
+  let html = '';
+  projectTodos.forEach(todo => {
+    const completedClass = todo.completed ? 'line-through text-gray-400' : 'text-gray-800';
+    const checkClass = todo.completed ? 'text-green-500' : 'text-gray-300';
+
+    html += `
+      <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors group">
+        <button onclick="toggleTodoComplete('${todo.id}')" class="flex-shrink-0">
+          <i class="fas fa-check-circle text-xl ${checkClass} hover:text-green-600 transition-colors"></i>
+        </button>
+        <div class="flex-1 ${completedClass} text-sm">${todo.content}</div>
+        <button onclick="removeTodo('${todo.id}')" class="flex-shrink-0 text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
+          <i class="fas fa-trash text-sm"></i>
+        </button>
+      </div>
+    `;
+  });
+
+  list.innerHTML = html;
+}
+
+function updateTodoBadge() {
+  const badge = document.getElementById('todoBadge');
+  if (!badge || !currentProjectId) return;
+
+  const incompleteTodos = store.todos.filter(
+    t => t.project_id === currentProjectId && !t.completed
+  );
+
+  if (incompleteTodos.length > 0) {
+    badge.textContent = incompleteTodos.length;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+function renderAllTodosList() {
+  const list = document.getElementById('allTodosList');
+  const countEl = document.getElementById('allTodosCount');
+  if (!list) return;
+
+  const incompleteTodos = store.todos.filter(t => !t.completed);
+
+  if (countEl) countEl.textContent = `${incompleteTodos.length} items`;
+
+  if (incompleteTodos.length === 0) {
+    list.innerHTML = '<div class="text-center py-8 text-gray-400"><p>No TODOs</p></div>';
+    return;
+  }
+
+  let html = '';
+  incompleteTodos.forEach(todo => {
+    const project = store.projects.find(p => p.id === todo.project_id);
+    const client = project ? store.clients.find(c => c.id === project.client_id) : null;
+
+    html += `
+      <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer border-b border-gray-100 last:border-0" onclick="loadProject('${project?.id}')">
+        <i class="fas fa-circle text-indigo-500 text-xs mt-1 flex-shrink-0"></i>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium text-gray-800 truncate">${todo.content}</div>
+          <div class="text-xs text-gray-500 truncate mt-0.5">
+            <span class="font-medium text-indigo-600">${client?.name || '?'}</span> / ${project?.name || '?'}
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  list.innerHTML = html;
+}
+
 // --- グローバル公開 ---
 window.openModal = openModal;
 window.closeModal = closeModal;
@@ -1771,3 +1966,7 @@ window.renderClientProjectList = renderClientProjectList;
 window.handleMinorDropOnMajor = handleMinorDropOnMajor;
 window.openLocalNewsModal = openLocalNewsModal;
 window.changeZoom = changeZoom;
+window.toggleTodoSidebar = toggleTodoSidebar;
+window.addTodo = addTodo;
+window.toggleTodoComplete = toggleTodoComplete;
+window.removeTodo = removeTodo;
