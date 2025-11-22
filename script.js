@@ -4,9 +4,6 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const { createClient } = supabase;
 const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Gemini API Key (localStorageに保存)
-let GEMINI_API_KEY = localStorage.getItem('gemini_api_key') || '';
-
 // --- 1. データ管理 (簡易Store) ---
 dayjs.locale('ja');
 dayjs.extend(window.dayjs_plugin_relativeTime);
@@ -155,22 +152,7 @@ window.onload = async () => {
   // 初期履歴の設定
   history.replaceState({ view: 'home' }, '', '#home');
   showHome(false); // 履歴追加なしで表示
-
-  updateChatbotVisibility();
 };
-
-window.addEventListener('hashchange', updateChatbotVisibility);
-
-function updateChatbotVisibility() {
-  const btn = document.getElementById('chatbot-trigger');
-  if (!btn) return;
-  // ホーム画面のみ表示
-  if (location.hash === '#home' || location.hash === '') {
-    btn.style.display = 'flex';
-  } else {
-    btn.style.display = 'none';
-  }
-}
 
 // ブラウザの戻る/進むボタンのハンドリング
 window.addEventListener('popstate', (event) => {
@@ -225,27 +207,6 @@ function setupEventListeners() {
       }
     });
   });
-
-  // AIチャット入力のEnterキー対応（IME対応）
-  const chatInput = document.getElementById('chatInput');
-  if (chatInput) {
-    let isChatComposing = false;
-
-    chatInput.addEventListener('compositionstart', () => {
-      isChatComposing = true;
-    });
-
-    chatInput.addEventListener('compositionend', () => {
-      isChatComposing = false;
-    });
-
-    chatInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !isChatComposing) {
-        e.preventDefault();
-        sendChatMessage();
-      }
-    });
-  }
 }
 
 function showHome(addHistory = true) {
@@ -512,16 +473,15 @@ function renderUpcomingTasks() {
   const today = dayjs();
 
   // タスクの重複排除とフィルタリング
+  // タスクIDをキーにして完全に重複を排除
   const uniqueTasksMap = new Map();
   store.tasks.forEach(t => {
     const end = dayjs(t.end_date);
     // 完了しておらず、終了日が今日以降のもの
     if (t.status !== 2 && end.isAfter(today.subtract(1, 'day'))) {
-      // 重複チェックキー: 名前と終了日で判定し、誤登録による重複も排除する
-      const key = `${t.name}|${t.end_date}`;
-
-      if (!uniqueTasksMap.has(key)) {
-        uniqueTasksMap.set(key, t);
+      // タスクIDをキーとして使用し、完全に重複を排除
+      if (!uniqueTasksMap.has(t.id)) {
+        uniqueTasksMap.set(t.id, t);
       }
     }
   });
@@ -953,10 +913,10 @@ function renderGantt() {
         const assigneeInitial = assignee ? assignee.charAt(0).toUpperCase() : null;
 
         taskBar.innerHTML = `
-          <div class="resize-handle resize-handle-left opacity-0 group-hover:opacity-100 bg-white/30" data-direction="left"></div>
+          <div class="resize-handle resize-handle-left" data-direction="left"></div>
           ${assigneeInitial ? `<div class="w-5 h-5 rounded-full bg-white/30 flex items-center justify-center text-[10px] font-bold mr-1 flex-shrink-0">${assigneeInitial}</div>` : ''}
-          <span class="pointer-events-none select-none flex-1 text-center truncate">${task.name}</span>
-          <div class="resize-handle resize-handle-right opacity-0 group-hover:opacity-100 bg-white/30" data-direction="right"></div>
+          <span class="task-bar-content pointer-events-none select-none flex-1 text-center truncate">${task.name}</span>
+          <div class="resize-handle resize-handle-right" data-direction="right"></div>
         `;
         if (task.memo) taskBar.title = task.memo;
 
@@ -1094,9 +1054,6 @@ function startDrag(e, task) {
   const taskBar = e.currentTarget;
   initialLeft = parseFloat(taskBar.style.left);
 
-  // 一時的にtransitionを無効化
-  taskBar.style.transition = 'none';
-
   document.body.style.cursor = 'grabbing';
   e.preventDefault();
 }
@@ -1105,28 +1062,34 @@ function onMouseMove(e) {
   if (!isDragging || !dragTask) return;
 
   const dx = e.clientX - dragStartX;
+  const taskBar = document.querySelector(`[data-task-id="${dragTask.id}"]`);
 
   if (!dragThresholdMet) {
     if (Math.abs(dx) > DRAG_THRESHOLD) {
       dragThresholdMet = true;
+      // ドラッグ開始時の視覚的フィードバック
+      if (taskBar) {
+        taskBar.classList.add('dragging');
+      }
     } else {
       return; // 閾値を超えていないなら何もしない
     }
   }
 
   // ドラッグ中の表示更新
-  const taskBar = document.querySelector(`[data-task-id= "${dragTask.id}"]`);
   if (taskBar) {
-    taskBar.style.left = `${initialLeft + dx} px`;
+    taskBar.style.left = `${initialLeft + dx}px`;
   }
 }
 
 async function onMouseUp(e) {
   if (!isDragging || !dragTask) return;
 
-  const taskBar = document.querySelector(`[data-task-id= "${dragTask.id}"]`);
+  const taskBar = document.querySelector(`[data-task-id="${dragTask.id}"]`);
+
+  // ドラッグクラスを削除
   if (taskBar) {
-    taskBar.style.transition = ''; // transition戻す
+    taskBar.classList.remove('dragging');
   }
 
   isDragging = false;
@@ -1158,7 +1121,9 @@ async function onMouseUp(e) {
     }
   } else {
     // 移動なしなら位置を元に戻す
-    if (taskBar) taskBar.style.left = `${initialLeft} px`;
+    if (taskBar) {
+      taskBar.style.left = `${initialLeft}px`;
+    }
   }
 
   dragTask = null;
@@ -1189,11 +1154,12 @@ function startResize(e, taskId, direction) {
   resizeDirection = direction;
   resizeStartX = e.clientX;
 
-  const taskBar = document.querySelector(`[data-task-id= "${taskId}"]`);
+  const taskBar = document.querySelector(`[data-task-id="${taskId}"]`);
   initialResizeLeft = parseFloat(taskBar.style.left);
   initialResizeWidth = parseFloat(taskBar.style.width);
 
-  taskBar.style.transition = 'none';
+  // リサイズクラスを追加
+  taskBar.classList.add('resizing');
   document.body.style.cursor = 'ew-resize';
   e.preventDefault();
 }
@@ -1202,18 +1168,18 @@ function onResizeMove(e) {
   if (!isResizing || !resizeTask) return;
 
   const dx = e.clientX - resizeStartX;
-  const taskBar = document.querySelector(`[data-task-id= "${resizeTask.id}"]`);
+  const taskBar = document.querySelector(`[data-task-id="${resizeTask.id}"]`);
   if (!taskBar) return;
 
   if (resizeDirection === 'right') {
     const newWidth = Math.max(CELL_WIDTH, initialResizeWidth + dx);
-    taskBar.style.width = `${newWidth} px`;
+    taskBar.style.width = `${newWidth}px`;
   } else if (resizeDirection === 'left') {
     const newWidth = Math.max(CELL_WIDTH, initialResizeWidth - dx);
     const newLeft = initialResizeLeft + dx;
     if (newWidth >= CELL_WIDTH) {
-      taskBar.style.width = `${newWidth} px`;
-      taskBar.style.left = `${newLeft} px`;
+      taskBar.style.width = `${newWidth}px`;
+      taskBar.style.left = `${newLeft}px`;
     }
   }
 }
@@ -1221,8 +1187,12 @@ function onResizeMove(e) {
 async function onResizeUp(e) {
   if (!isResizing || !resizeTask) return;
 
-  const taskBar = document.querySelector(`[data-task-id= "${resizeTask.id}"]`);
-  if (taskBar) taskBar.style.transition = '';
+  const taskBar = document.querySelector(`[data-task-id="${resizeTask.id}"]`);
+
+  // リサイズクラスを削除
+  if (taskBar) {
+    taskBar.classList.remove('resizing');
+  }
 
   isResizing = false;
   document.body.style.cursor = '';
@@ -1729,222 +1699,6 @@ function showDeadlineToast(count) {
   }, 10000);
 }
 
-// --- 12. AIチャット機能 ---
-let chatHistory = [];
-let pendingChatMessage = null;
-
-function toggleChat() {
-  const fab = document.getElementById('chatFAB');
-  const window = document.getElementById('chatWindow');
-
-  if (window.classList.contains('hidden')) {
-    window.classList.remove('hidden');
-    fab.classList.add('hidden');
-  } else {
-    window.classList.add('hidden');
-    fab.classList.remove('hidden');
-  }
-}
-
-function changeApiKey() {
-  GEMINI_API_KEY = '';
-  localStorage.removeItem('gemini_api_key');
-  openApiKeyModal();
-}
-
-function openApiKeyModal() {
-  const modal = document.getElementById('apiKeyModal');
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
-  document.getElementById('geminiApiKeyInput').value = GEMINI_API_KEY || '';
-}
-
-function closeApiKeyModal() {
-  const modal = document.getElementById('apiKeyModal');
-  modal.classList.add('hidden');
-  modal.classList.remove('flex');
-}
-
-function saveApiKey() {
-  const key = document.getElementById('geminiApiKeyInput').value.trim();
-  if (!key) {
-    alert('APIキーを入力してください');
-    return;
-  }
-  GEMINI_API_KEY = key;
-  localStorage.setItem('gemini_api_key', key);
-  closeApiKeyModal();
-
-  // モーダルを開く前に保留していたメッセージがあれば送信
-  if (pendingChatMessage) {
-    const msg = pendingChatMessage;
-    pendingChatMessage = null;
-    document.getElementById('chatInput').value = msg;
-    sendChatMessage();
-  }
-}
-
-async function sendChatMessage() {
-  const input = document.getElementById('chatInput');
-  const message = input.value.trim();
-  if (!message) return;
-
-  if (!GEMINI_API_KEY) {
-    pendingChatMessage = message;
-    input.value = '';
-    openApiKeyModal();
-    return;
-  }
-
-  const messagesDiv = document.getElementById('chatMessages');
-
-  // ユーザーメッセージ表示
-  appendChatMessage('user', message);
-  input.value = '';
-
-  // ローディング表示
-  const loadingId = appendChatMessage('assistant', 'thinking...');
-
-  try {
-    // プロジェクトデータをコンテキストとして準備
-    // より詳細な情報をAIに渡す
-    const context = {
-      summary: {
-        totalClients: store.clients.length,
-        totalProjects: store.projects.length,
-        totalTasks: store.tasks.length
-      },
-      projects: store.projects.map(p => {
-        const pTasks = store.tasks.filter(t => {
-          const minor = store.minorCats.find(m => m.id === t.minor_id);
-          const major = minor ? store.majorCats.find(maj => maj.id === minor.major_id) : null;
-          return major && major.project_id === p.id;
-        });
-        const done = pTasks.filter(t => t.status === 2).length;
-        const inProgress = pTasks.filter(t => t.status === 1).length;
-        const todo = pTasks.filter(t => t.status === 0).length;
-
-        return {
-          name: p.name,
-          overview: p.overview || '概要なし',
-          stakeholders: p.stakeholders || '未設定',
-          progress: {
-            total: pTasks.length,
-            done,
-            inProgress,
-            todo,
-            percentage: pTasks.length > 0 ? Math.round((done / pTasks.length) * 100) : 0
-          }
-        };
-      }),
-      urgentTasks: store.tasks.filter(t => {
-        const end = dayjs(t.end_date);
-        const today = dayjs();
-        // 期限切れ、または3日以内に期限が来る未完了タスク
-        return t.status !== 2 && (end.isBefore(today) || end.diff(today, 'day') <= 3);
-      }).map(t => ({
-        name: t.name,
-        dueDate: t.end_date,
-        status: t.status === 0 ? '未着手' : '進行中'
-      }))
-    };
-
-    // Gemini API v1beta - Verified working model
-    // Using URL parameter for API key to avoid CORS/header issues in browser
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: `あなたは、経験豊富なプロジェクトマネージャー（PM）のアシスタントAIです。
-以下のプロジェクトデータを分析し、ユーザーの質問に対して回答してください。
-
-【重要な制約】
-- **回答は1つの段落にまとめてください。複数のセクションに分けないでください。**
-- **絶対にMarkdownのテーブル（表）を使用しないでください。**
-- **箇条書きも最小限にし、基本的に文章で回答してください。**
-- **3〜5文程度の簡潔な回答を心がけてください。**
-- 文章は親しみやすい「です・ます」調で記述してください。
-- 遅れているタスクやリスクがあれば優先的に言及してください。
-
-【現在のプロジェクトデータ】
-${JSON.stringify(context, null, 2)}
-
-【ユーザーの質問】
-${message}
-
-1つの段落で、結論と重要なポイントを簡潔に述べてください。`
-          }]
-        }]
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error('API Error Details:', errorData);
-      throw new Error(`API Error: ${response.status} - ${errorData}`);
-    }
-
-    const data = await response.json();
-
-    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-      throw new Error('Invalid API response structure');
-    }
-
-    const reply = data.candidates[0].content.parts[0].text;
-
-    // ローディングを実際の返信に置き換え
-    document.getElementById(loadingId).innerHTML = marked(reply);
-
-  } catch (error) {
-    console.error('AI Error:', error);
-    let errorMsg = '❌ エラーが発生しました。';
-
-    if (error.message.includes('404')) {
-      errorMsg += '<br>APIキーが無効です。正しいキーを入力してください。';
-    } else if (error.message.includes('API Error')) {
-      errorMsg += `<br>${error.message}`;
-    } else {
-      errorMsg += '<br>ネットワーク接続を確認してください。';
-    }
-
-    document.getElementById(loadingId).innerHTML = errorMsg;
-  }
-}
-
-function appendChatMessage(role, content) {
-  const messagesDiv = document.getElementById('chatMessages');
-  const id = 'msg-' + Date.now();
-
-  const msgDiv = document.createElement('div');
-  msgDiv.id = id;
-  msgDiv.className = role === 'user'
-    ? 'mb-3 flex justify-end'
-    : 'mb-3 flex justify-start';
-
-  msgDiv.innerHTML = role === 'user'
-    ? `<div class="bg-indigo-600 text-white px-4 py-2 rounded-lg max-w-[85%] text-sm leading-relaxed shadow-sm">${content}</div>`
-    : `<div class="bg-white border border-gray-200 text-gray-800 px-4 py-2 rounded-lg max-w-[85%] text-sm leading-relaxed shadow-sm">${content}</div>`;
-
-  messagesDiv.appendChild(msgDiv);
-  messagesDiv.scrollTop = messagesDiv.scrollHeight;
-
-  return id;
-}
-
-// Marked.js alternative (simple markdown)
-function marked(text) {
-  return text
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/\n/g, '<br>');
-}
-
 // --- グローバル公開 ---
 window.openModal = openModal;
 window.closeModal = closeModal;
@@ -1955,12 +1709,6 @@ window.loadProject = loadProject;
 window.openTaskModal = openTaskModal;
 window.openProjectInfoModal = openProjectInfoModal;
 window.saveProjectInfo = saveProjectInfo;
-window.toggleChat = toggleChat;
-window.sendChatMessage = sendChatMessage;
-window.openApiKeyModal = openApiKeyModal;
-window.closeApiKeyModal = closeApiKeyModal;
-window.saveApiKey = saveApiKey;
-window.changeApiKey = changeApiKey;
 window.renderClientProjectList = renderClientProjectList;
 window.handleMinorDropOnMajor = handleMinorDropOnMajor;
 window.openLocalNewsModal = openLocalNewsModal;

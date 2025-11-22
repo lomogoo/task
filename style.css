@@ -79,12 +79,87 @@
 
 /* タスクバーのスタイル */
 .task-bar {
-  transition: all 0.2s;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
   cursor: grab;
+  position: relative;
+}
+
+.task-bar:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10;
 }
 
 .task-bar:active {
   cursor: grabbing;
+}
+
+.task-bar.dragging {
+  opacity: 0.7;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  transform: scale(1.02);
+  cursor: grabbing;
+  z-index: 100;
+}
+
+.task-bar.resizing {
+  transition: none;
+}
+
+/* リサイズハンドル */
+.resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 10;
+}
+
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: white;
+  border-radius: 2px;
+  opacity: 0.8;
+}
+
+.resize-handle-left {
+  left: 0;
+  cursor: w-resize;
+}
+
+.resize-handle-left::after {
+  left: 2px;
+}
+
+.resize-handle-right {
+  right: 0;
+  cursor: e-resize;
+}
+
+.resize-handle-right::after {
+  right: 2px;
+}
+
+.task-bar:hover .resize-handle {
+  opacity: 1;
+}
+
+.resize-handle:hover {
+  opacity: 1;
+}
+
+.resize-handle:hover::after {
+  background: white;
+  opacity: 1;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
 }
 
 /* 休日背景 */
