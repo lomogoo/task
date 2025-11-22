@@ -147,37 +147,40 @@
       <!-- 中央・右カラム: 週間タスク & プロジェクト -->
       <div class="col-span-12 lg:col-span-8 space-y-6">
 
-        <!-- 週間タスク -->
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div class="flex justify-between items-center mb-4">
-            <h3 class="font-bold text-gray-700 flex items-center">
-              <i class="fas fa-calendar-alt text-indigo-500 mr-2"></i>
-              Upcoming Tasks
-              <span id="upcomingCount"
-                class="ml-2 text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full"></span>
-            </h3>
-          </div>
-          <div id="upcomingTasksList" class="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-            <!-- JSで生成 -->
-            <div class="text-center py-8 text-gray-400">
-              <p>No upcoming tasks</p>
+        <!-- 週間タスク & TODOs を横並びに -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- 週間タスク -->
+          <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <div class="flex justify-between items-center mb-3">
+              <h3 class="font-bold text-gray-700 flex items-center text-sm">
+                <i class="fas fa-calendar-alt text-indigo-500 mr-2 text-base"></i>
+                Upcoming Tasks
+                <span id="upcomingCount"
+                  class="ml-2 text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full"></span>
+              </h3>
+            </div>
+            <div id="upcomingTasksList" class="space-y-2 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+              <!-- JSで生成 -->
+              <div class="text-center py-8 text-gray-400 text-sm">
+                <p>No upcoming tasks</p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- 全プロジェクトのTODO -->
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <div class="flex justify-between items-center mb-4">
-            <h3 class="font-bold text-gray-700 flex items-center">
-              <i class="fas fa-list-check text-indigo-500 mr-2"></i>
-              All TODOs
-              <span id="allTodosCount" class="ml-2 text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full"></span>
-            </h3>
-          </div>
-          <div id="allTodosList" class="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-            <!-- JSで生成 -->
-            <div class="text-center py-8 text-gray-400">
-              <p>No TODOs</p>
+          <!-- 全プロジェクトのTODO -->
+          <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <div class="flex justify-between items-center mb-3">
+              <h3 class="font-bold text-gray-700 flex items-center text-sm">
+                <i class="fas fa-list-check text-indigo-500 mr-2 text-base"></i>
+                All TODOs
+                <span id="allTodosCount" class="ml-2 text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full"></span>
+              </h3>
+            </div>
+            <div id="allTodosList" class="space-y-2 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
+              <!-- JSで生成 -->
+              <div class="text-center py-8 text-gray-400 text-sm">
+                <p>No TODOs</p>
+              </div>
             </div>
           </div>
         </div>
@@ -277,7 +280,7 @@
         </div>
 
         <!-- TODO入力エリア -->
-        <div class="p-4 border-b border-gray-100">
+        <div class="p-4 border-b border-gray-100 space-y-2">
           <div class="flex gap-2">
             <input type="text" id="todoInput" placeholder="新しいTODOを入力..."
               class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -287,6 +290,8 @@
               <i class="fas fa-plus"></i>
             </button>
           </div>
+          <input type="date" id="todoDueDateInput"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
         </div>
 
         <!-- TODOリスト -->

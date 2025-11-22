@@ -125,7 +125,7 @@ async function updateProjectInfo(id, overview, stakeholders) {
 }
 
 // --- TODO CRUD操作 ---
-async function saveTodo(projectId, content) {
+async function saveTodo(projectId, content, dueDate = null) {
   const maxOrder = store.todos
     .filter(t => t.project_id === projectId)
     .reduce((max, t) => Math.max(max, t.sort_order || 0), 0);
@@ -135,6 +135,7 @@ async function saveTodo(projectId, content) {
       project_id: projectId,
       content,
       completed: false,
+      due_date: dueDate,
       sort_order: maxOrder + 1000
     }).select();
   if (error) throw error;
@@ -145,6 +146,7 @@ async function updateTodo(id, updates) {
   const dbUpdates = {};
   if (updates.content !== undefined) dbUpdates.content = updates.content;
   if (updates.completed !== undefined) dbUpdates.completed = updates.completed;
+  if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
   if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
   dbUpdates.updated_at = new Date().toISOString();
 
@@ -528,7 +530,7 @@ function renderUpcomingTasks() {
   if (countEl) countEl.textContent = `${tasks.length} tasks`;
 
   if (tasks.length === 0) {
-    list.innerHTML = `<div class="text-center py-8 text-gray-400"><p>No upcoming tasks</p></div>`;
+    list.innerHTML = `<div class="text-center py-8 text-gray-400 text-sm"><p>No upcoming tasks</p></div>`;
     return;
   }
 
@@ -541,26 +543,20 @@ function renderUpcomingTasks() {
 
     const daysLeft = dayjs(t.end_date).diff(today, 'day');
     let timeClass = 'text-gray-500';
+    let timeText = `${daysLeft} days`;
     if (daysLeft < 0) { timeClass = 'text-red-500 font-bold'; timeText = 'Overdue'; }
     else if (daysLeft === 0) { timeClass = 'text-orange-500 font-bold'; timeText = 'Today'; }
     else if (daysLeft === 1) { timeClass = 'text-indigo-500'; timeText = 'Tomorrow'; }
-    let timeText = `${daysLeft} days left`;
 
     html += `
-      <div class="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-indigo-50 transition-colors group cursor-pointer border-b border-gray-100 last:border-0 mouse-glow" onclick="loadProject('${project?.id}')">
-        <div class="w-2 h-2 rounded-full ${t.status === 0 ? 'bg-gray-300' : 'bg-blue-500'} mr-3 flex-shrink-0"></div>
+      <div class="flex items-start gap-2 p-2.5 bg-gray-50 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer" onclick="loadProject('${project?.id}')">
+        <div class="w-2 h-2 rounded-full ${t.status === 0 ? 'bg-gray-300' : 'bg-blue-500'} mt-1 flex-shrink-0"></div>
         <div class="flex-1 min-w-0">
-          <h4 class="text-sm font-bold text-gray-800 truncate">${t.name}</h4>
-          <p class="text-xs text-gray-500 truncate">
-            <span class="font-medium text-indigo-600">${client?.name || '?'}</span> / ${project?.name || '?'}
+          <h4 class="text-xs font-medium text-gray-800 truncate">${t.name}</h4>
+          <p class="text-xs text-gray-500 truncate mt-0.5 flex items-center gap-2">
+            <span><span class="font-medium text-indigo-600">${client?.name || '?'}</span> / ${project?.name || '?'}</span>
+            <span class="${timeClass} ml-auto flex-shrink-0 text-xs">${timeText}</span>
           </p>
-          <p class="text-[10px] text-gray-400 truncate mt-0.5">
-            ${major?.name || '?'} > ${minor?.name || '?'}
-          </p>
-        </div>
-        <div class="text-xs ${timeClass} whitespace-nowrap ml-2 flex-shrink-0 text-right">
-          <div>${timeText}</div>
-          <div class="text-[10px] text-gray-300 font-normal">${dayjs(t.end_date).format('MM/DD')}</div>
         </div>
       </div>
     `;
@@ -1818,7 +1814,9 @@ function toggleTodoSidebar() {
 
 async function addTodo() {
   const input = document.getElementById('todoInput');
+  const dueDateInput = document.getElementById('todoDueDateInput');
   const content = input.value.trim();
+  const dueDate = dueDateInput.value || null;
 
   if (!content) return;
   if (!currentProjectId) {
@@ -1827,11 +1825,12 @@ async function addTodo() {
   }
 
   try {
-    await saveTodo(currentProjectId, content);
+    await saveTodo(currentProjectId, content, dueDate);
     await loadAllData();
     renderTodoList();
     updateTodoBadge();
     input.value = '';
+    dueDateInput.value = '';
   } catch (error) {
     console.error('TODO追加エラー:', error);
     alert('TODOの追加に失敗しました');
@@ -1873,7 +1872,15 @@ function renderTodoList() {
   const list = document.getElementById('todoList');
   if (!list || !currentProjectId) return;
 
-  const projectTodos = store.todos.filter(t => t.project_id === currentProjectId);
+  const projectTodos = store.todos
+    .filter(t => t.project_id === currentProjectId)
+    .sort((a, b) => {
+      // 期日でソート（期日なしは最後）
+      if (!a.due_date && !b.due_date) return 0;
+      if (!a.due_date) return 1;
+      if (!b.due_date) return -1;
+      return dayjs(a.due_date).diff(dayjs(b.due_date));
+    });
 
   if (projectTodos.length === 0) {
     list.innerHTML = '<div class="text-center py-8 text-gray-400 text-sm">TODOがありません</div>';
@@ -1883,14 +1890,33 @@ function renderTodoList() {
   let html = '';
   projectTodos.forEach(todo => {
     const completedClass = todo.completed ? 'line-through text-gray-400' : 'text-gray-800';
-    const checkClass = todo.completed ? 'text-green-500' : 'text-gray-300';
+    const checkboxClass = todo.completed
+      ? 'border-green-500 bg-green-500 text-white'
+      : 'border-gray-300 bg-white text-transparent hover:border-indigo-500';
+
+    // 期日表示
+    let dueDateHtml = '';
+    if (todo.due_date) {
+      const dueDate = dayjs(todo.due_date);
+      const today = dayjs();
+      const daysUntil = dueDate.diff(today, 'day');
+
+      let dateClass = 'text-gray-500';
+      if (daysUntil < 0) dateClass = 'text-red-500 font-medium';
+      else if (daysUntil <= 3) dateClass = 'text-orange-500 font-medium';
+
+      dueDateHtml = `<span class="text-xs ${dateClass}"><i class="far fa-calendar mr-1"></i>${dueDate.format('M/D')}</span>`;
+    }
 
     html += `
       <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors group">
-        <button onclick="toggleTodoComplete('${todo.id}')" class="flex-shrink-0">
-          <i class="fas fa-check-circle text-xl ${checkClass} hover:text-green-600 transition-colors"></i>
+        <button onclick="toggleTodoComplete('${todo.id}')" class="flex-shrink-0 w-5 h-5 border-2 ${checkboxClass} rounded transition-all flex items-center justify-center">
+          <i class="fas fa-check text-xs"></i>
         </button>
-        <div class="flex-1 ${completedClass} text-sm">${todo.content}</div>
+        <div class="flex-1 min-w-0">
+          <div class="${completedClass} text-sm truncate">${todo.content}</div>
+          ${dueDateHtml ? `<div class="mt-0.5">${dueDateHtml}</div>` : ''}
+        </div>
         <button onclick="removeTodo('${todo.id}')" class="flex-shrink-0 text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
           <i class="fas fa-trash text-sm"></i>
         </button>
@@ -1922,7 +1948,15 @@ function renderAllTodosList() {
   const countEl = document.getElementById('allTodosCount');
   if (!list) return;
 
-  const incompleteTodos = store.todos.filter(t => !t.completed);
+  const incompleteTodos = store.todos
+    .filter(t => !t.completed)
+    .sort((a, b) => {
+      // 期日でソート（期日なしは最後）
+      if (!a.due_date && !b.due_date) return 0;
+      if (!a.due_date) return 1;
+      if (!b.due_date) return -1;
+      return dayjs(a.due_date).diff(dayjs(b.due_date));
+    });
 
   if (countEl) countEl.textContent = `${incompleteTodos.length} items`;
 
@@ -1936,13 +1970,33 @@ function renderAllTodosList() {
     const project = store.projects.find(p => p.id === todo.project_id);
     const client = project ? store.clients.find(c => c.id === project.client_id) : null;
 
+    // 期日表示
+    let dueDateHtml = '';
+    if (todo.due_date) {
+      const dueDate = dayjs(todo.due_date);
+      const today = dayjs();
+      const daysUntil = dueDate.diff(today, 'day');
+
+      let dateClass = 'text-gray-500';
+      let dateIcon = 'far fa-calendar';
+      if (daysUntil < 0) {
+        dateClass = 'text-red-500 font-medium';
+        dateIcon = 'fas fa-exclamation-circle';
+      } else if (daysUntil <= 3) {
+        dateClass = 'text-orange-500 font-medium';
+      }
+
+      dueDateHtml = `<span class="${dateClass}"><i class="${dateIcon} mr-1"></i>${dueDate.format('M/D')}</span>`;
+    }
+
     html += `
-      <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer border-b border-gray-100 last:border-0" onclick="loadProject('${project?.id}')">
-        <i class="fas fa-circle text-indigo-500 text-xs mt-1 flex-shrink-0"></i>
+      <div class="flex items-start gap-2 p-3 bg-gray-50 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer" onclick="loadProject('${project?.id}')">
+        <div class="w-4 h-4 border-2 border-gray-300 rounded flex-shrink-0 mt-0.5"></div>
         <div class="flex-1 min-w-0">
           <div class="text-sm font-medium text-gray-800 truncate">${todo.content}</div>
-          <div class="text-xs text-gray-500 truncate mt-0.5">
-            <span class="font-medium text-indigo-600">${client?.name || '?'}</span> / ${project?.name || '?'}
+          <div class="text-xs text-gray-500 truncate mt-1 flex items-center gap-2">
+            <span><span class="font-medium text-indigo-600">${client?.name || '?'}</span> / ${project?.name || '?'}</span>
+            ${dueDateHtml ? `<span class="ml-auto flex-shrink-0">${dueDateHtml}</span>` : ''}
           </div>
         </div>
       </div>
